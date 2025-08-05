@@ -7,21 +7,25 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות ---
-const LoginScreen = ({ onLogin }) => {
-    const [username, setUsername] = useState('');
+// --- רכיב מסך ההתחברות עם רשימה נפתחת ---
+const LoginScreen = ({ onLogin, users }) => {
+    const [selectedUser, setSelectedUser] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!selectedUser) {
+            setError("יש לבחור שם משתמש.");
+            return;
+        }
         setError('');
         setIsLoggingIn(true);
         try {
-            await onLogin(username, password);
+            await onLogin(selectedUser, password);
         } catch (err) {
-            setError("שם המשתמש או הסיסמה שגויים.");
+            setError("הסיסמה שגויה.");
             setIsLoggingIn(false);
         }
     };
@@ -33,7 +37,14 @@ const LoginScreen = ({ onLogin }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם משתמש</label>
-                        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
+                        <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} required>
+                            <option value="" disabled>בחר את שמך מהרשימה</option>
+                            {users.map(user => (
+                                <option key={user.username} value={user.username}>
+                                    {user.displayName}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -81,7 +92,7 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
             <select value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
               <option value="" disabled>בחר איש צוות</option>
               {users.map(user => (
-                <option key={user} value={user}>{user}</option>
+                <option key={user.username} value={user.displayName}>{user.displayName}</option>
               ))}
             </select>
           </div>
@@ -140,7 +151,7 @@ const TicketDetails = ({ ticket, users, onUpdateTicket, onClose }) => {
             <div className="details-actions">
                 <div className="reassign-action">
                     <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                        {users.map(user => <option key={user} value={user}>{user}</option>)}
+                        {users.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
                     </select>
                     <button onClick={handleReassign} className="btn-reassign">העבר</button>
                 </div>
@@ -170,7 +181,6 @@ const MokedApp = () => {
   const [staffMembers, setStaffMembers] = useState([]);
   
   useEffect(() => {
-    console.log("🚀 מאתחל Firebase...");
     const firebaseConfig = {
       apiKey: "AIzaSyCYGDwSDB2zbyJVRgp7I-VPOvv9ujWGvxA",
       authDomain: "lavy-d35b5.firebaseapp.com",
@@ -185,15 +195,17 @@ const MokedApp = () => {
     const firestoreDb = getFirestore(app);
     const firebaseAuth = getAuth(app);
     
-    console.log("✅ Firebase הוקם בהצלחה");
-    console.log("DB:", firestoreDb);
-    console.log("Auth:", firebaseAuth);
-    
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
+    // קריאה ראשונית של רשימת המשתמשים, עוד לפני ההתחברות
+    const usersCollectionRef = collection(firestoreDb, "users");
+    onSnapshot(usersCollectionRef, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => doc.data());
+        setStaffMembers(usersData);
+    });
+
     const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-        console.log("👤 שינוי במצב המשתמש:", currentUser);
         setUser(currentUser);
         setLoading(false);
     });
@@ -201,76 +213,24 @@ const MokedApp = () => {
     return () => unsubscribe();
   }, []);
 
-  // --- אפקט לקריאת הנתונים מ-Firestore ---
   useEffect(() => {
-    console.log("=== useEffect התחיל ===");
-    console.log("db:", db);
-    console.log("user:", user);
-    
     if (!db || !user) {
-        console.log("❌ db או user לא קיימים, יוצא מהפונקציה");
         setTickets([]);
-        setStaffMembers([]);
         return;
-    }
-    
-    console.log("✅ db ו-user קיימים, מתחיל לטעון נתונים");
-    
-    // נתיב פשוט לטיקטים - ישירות בשורש
-    const ticketsCollectionRef = collection(db, 'tickets');
-    console.log("📋 יוצר חיבור לקולקציית tickets");
-    
-    const unsubscribeTickets = onSnapshot(ticketsCollectionRef, (snapshot) => {
-      console.log("🎯 קיבלתי תגובה מקולקציית tickets");
-      console.log("מספר טיקטים שנמצאו:", snapshot.docs.length);
-      console.log("מסמכים גולמיים:", snapshot.docs);
-      
-      const ticketsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        console.log("נתוני טיקט:", { id: doc.id, ...data });
-        return { ...data, id: doc.id };
-      });
-      
-      console.log("רשימת טיקטים סופית:", ticketsData);
-      setTickets(ticketsData);
-    }, (error) => {
-      console.error("❌ שגיאה בטעינת tickets:", error);
-    });
-
-    // נתיב פשוט לרשימת המשתמשים
-    const usersCollectionRef = collection(db, 'users');
-    console.log("👥 יוצר חיבור לקולקציית users");
-    
-    const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-        console.log("🎯 קיבלתי תגובה מקולקציית users");
-        console.log("מספר משתמשים שנמצאו:", snapshot.docs.length);
-        console.log("מסמכי משתמשים גולמיים:", snapshot.docs);
-        
-        const usersData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            console.log("נתוני משתמש גולמיים:", { id: doc.id, data });
-            console.log("displayName:", data.displayName);
-            return data.displayName;
-        });
-        
-        console.log("רשימת משתמשים סופית:", usersData);
-        setStaffMembers(usersData);
-    }, (error) => {
-        console.error("❌ שגיאה בטעינת users:", error);
-    });
-
-    return () => {
-        console.log("🧹 מנקה listeners");
-        unsubscribeTickets();
-        unsubscribeUsers();
     };
+    
+    const ticketsCollectionRef = collection(db, "tickets");
+    const unsubscribeTickets = onSnapshot(ticketsCollectionRef, (snapshot) => {
+      const ticketsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setTickets(ticketsData);
+    });
+
+    return () => unsubscribeTickets();
   }, [db, user]);
 
   const handleLogin = async (username, password) => {
-    console.log("🔐 מנסה להתחבר עם:", username);
     if (!auth) throw new Error("Auth service not ready");
     const email = `${username.toLowerCase()}@lavie.system`;
-    console.log("📧 אימייל שנוצר:", email);
     await signInWithEmailAndPassword(auth, email, password);
   };
 
@@ -281,9 +241,7 @@ const MokedApp = () => {
 
   const handleAddTicket = async (newTicketData) => {
     if (!db || !user) return;
-    console.log("🎫 יוצר טיקט חדש:", newTicketData);
-    // נתיב פשוט לטיקטים
-    const ticketsCollectionRef = collection(db, 'tickets');
+    const ticketsCollectionRef = collection(db, "tickets");
     await addDoc(ticketsCollectionRef, {
         ...newTicketData,
         requester: user.displayName || user.email.split('@')[0], 
@@ -295,8 +253,7 @@ const MokedApp = () => {
 
   const handleUpdateTicket = async (updatedTicket) => {
     if (!db) return;
-    // נתיב פשוט לטיקטים
-    const ticketDocRef = doc(db, 'tickets', updatedTicket.id);
+    const ticketDocRef = doc(db, "tickets", updatedTicket.id);
     const { id, ...ticketData } = updatedTicket;
     await updateDoc(ticketDocRef, ticketData);
     setSelectedTicket(null);
@@ -309,7 +266,7 @@ const MokedApp = () => {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} users={staffMembers} />;
   }
 
   return (
