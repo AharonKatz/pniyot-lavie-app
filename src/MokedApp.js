@@ -170,6 +170,7 @@ const MokedApp = () => {
   const [staffMembers, setStaffMembers] = useState([]);
   
   useEffect(() => {
+    console.log("🚀 מאתחל Firebase...");
     const firebaseConfig = {
       apiKey: "AIzaSyCYGDwSDB2zbyJVRgp7I-VPOvv9ujWGvxA",
       authDomain: "lavy-d35b5.firebaseapp.com",
@@ -184,10 +185,15 @@ const MokedApp = () => {
     const firestoreDb = getFirestore(app);
     const firebaseAuth = getAuth(app);
     
+    console.log("✅ Firebase הוקם בהצלחה");
+    console.log("DB:", firestoreDb);
+    console.log("Auth:", firebaseAuth);
+    
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
     const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+        console.log("👤 שינוי במצב המשתמש:", currentUser);
         setUser(currentUser);
         setLoading(false);
     });
@@ -197,36 +203,74 @@ const MokedApp = () => {
 
   // --- אפקט לקריאת הנתונים מ-Firestore ---
   useEffect(() => {
+    console.log("=== useEffect התחיל ===");
+    console.log("db:", db);
+    console.log("user:", user);
+    
     if (!db || !user) {
+        console.log("❌ db או user לא קיימים, יוצא מהפונקציה");
         setTickets([]);
         setStaffMembers([]);
         return;
-    };
+    }
     
-    // --- תיקון: קריאה מהנתיב הפשוט והנכון ---
-    // האזנה לבקשות
-    const ticketsCollectionRef = collection(db, "tickets");
+    console.log("✅ db ו-user קיימים, מתחיל לטעון נתונים");
+    
+    // נתיב פשוט לטיקטים - ישירות בשורש
+    const ticketsCollectionRef = collection(db, 'tickets');
+    console.log("📋 יוצר חיבור לקולקציית tickets");
+    
     const unsubscribeTickets = onSnapshot(ticketsCollectionRef, (snapshot) => {
-      const ticketsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      console.log("🎯 קיבלתי תגובה מקולקציית tickets");
+      console.log("מספר טיקטים שנמצאו:", snapshot.docs.length);
+      console.log("מסמכים גולמיים:", snapshot.docs);
+      
+      const ticketsData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log("נתוני טיקט:", { id: doc.id, ...data });
+        return { ...data, id: doc.id };
+      });
+      
+      console.log("רשימת טיקטים סופית:", ticketsData);
       setTickets(ticketsData);
-    }, (error) => console.error("Error fetching tickets:", error));
+    }, (error) => {
+      console.error("❌ שגיאה בטעינת tickets:", error);
+    });
 
-    // האזנה לרשימת העובדים
-    const usersCollectionRef = collection(db, "users");
+    // נתיב פשוט לרשימת המשתמשים
+    const usersCollectionRef = collection(db, 'users');
+    console.log("👥 יוצר חיבור לקולקציית users");
+    
     const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-        const usersData = snapshot.docs.map(doc => doc.data().displayName);
+        console.log("🎯 קיבלתי תגובה מקולקציית users");
+        console.log("מספר משתמשים שנמצאו:", snapshot.docs.length);
+        console.log("מסמכי משתמשים גולמיים:", snapshot.docs);
+        
+        const usersData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log("נתוני משתמש גולמיים:", { id: doc.id, data });
+            console.log("displayName:", data.displayName);
+            return data.displayName;
+        });
+        
+        console.log("רשימת משתמשים סופית:", usersData);
         setStaffMembers(usersData);
-    }, (error) => console.error("Error fetching users:", error));
+    }, (error) => {
+        console.error("❌ שגיאה בטעינת users:", error);
+    });
 
     return () => {
+        console.log("🧹 מנקה listeners");
         unsubscribeTickets();
         unsubscribeUsers();
     };
   }, [db, user]);
 
   const handleLogin = async (username, password) => {
+    console.log("🔐 מנסה להתחבר עם:", username);
     if (!auth) throw new Error("Auth service not ready");
     const email = `${username.toLowerCase()}@lavie.system`;
+    console.log("📧 אימייל שנוצר:", email);
     await signInWithEmailAndPassword(auth, email, password);
   };
 
@@ -237,7 +281,9 @@ const MokedApp = () => {
 
   const handleAddTicket = async (newTicketData) => {
     if (!db || !user) return;
-    const ticketsCollectionRef = collection(db, "tickets");
+    console.log("🎫 יוצר טיקט חדש:", newTicketData);
+    // נתיב פשוט לטיקטים
+    const ticketsCollectionRef = collection(db, 'tickets');
     await addDoc(ticketsCollectionRef, {
         ...newTicketData,
         requester: user.displayName || user.email.split('@')[0], 
@@ -249,7 +295,8 @@ const MokedApp = () => {
 
   const handleUpdateTicket = async (updatedTicket) => {
     if (!db) return;
-    const ticketDocRef = doc(db, "tickets", updatedTicket.id);
+    // נתיב פשוט לטיקטים
+    const ticketDocRef = doc(db, 'tickets', updatedTicket.id);
     const { id, ...ticketData } = updatedTicket;
     await updateDoc(ticketDocRef, ticketData);
     setSelectedTicket(null);
