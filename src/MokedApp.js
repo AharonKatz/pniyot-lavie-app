@@ -7,19 +7,23 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב חדש למסך ההתחברות עם שם משתמש ---
+// --- רכיב מסך ההתחברות עם טיפול שגיאות משופר ---
 const LoginScreen = ({ onLogin }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setIsLoggingIn(true); // הפעלת חיווי טעינה
         try {
             await onLogin(username, password);
         } catch (err) {
+            // תפיסת השגיאה מ-Firebase והצגת הודעה למשתמש
             setError("שם המשתמש או הסיסמה שגויים.");
+            setIsLoggingIn(false); // כיבוי חיווי טעינה
         }
     };
 
@@ -37,7 +41,9 @@ const LoginScreen = ({ onLogin }) => {
                         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
                     {error && <p className="error-message">{error}</p>}
-                    <button type="submit" className="btn-submit">התחבר</button>
+                    <button type="submit" className="btn-submit" disabled={isLoggingIn}>
+                        {isLoggingIn ? "מתחבר..." : "התחבר"}
+                    </button>
                 </form>
             </div>
         </div>
