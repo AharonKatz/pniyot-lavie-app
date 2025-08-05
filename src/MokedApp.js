@@ -7,7 +7,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות עם קוד איתור באגים ---
+// --- רכיב מסך ההתחברות ---
 const LoginScreen = ({ onLogin }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -21,8 +21,7 @@ const LoginScreen = ({ onLogin }) => {
         try {
             await onLogin(username, password);
         } catch (err) {
-            console.error("Caught an error during login:", err); // מדפיס את השגיאה המלאה לקונסולה לצורך איתור באגים
-            setError("שם המשתמש או הסיסמה שגויים."); // הצגת הודעה ברורה למשתמש
+            setError("שם המשתמש או הסיסמה שגויים.");
             setIsLoggingIn(false);
         }
     };
@@ -51,7 +50,7 @@ const LoginScreen = ({ onLogin }) => {
 };
 
 
-// --- שאר הרכיבים נשארים ללא שינוי ---
+// --- רכיב טופס יצירת בקשה ---
 const NewTicketForm = ({ onClose, onAddTicket, users }) => {
   const [title, setTitle] = useState('');
   const [assignee, setAssignee] = useState(''); 
@@ -108,6 +107,7 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
   );
 };
 
+// --- רכיב פרטי בקשה ---
 const TicketDetails = ({ ticket, users, onUpdateTicket, onClose }) => {
     const [newAssignee, setNewAssignee] = useState(ticket.assignee);
 
@@ -167,30 +167,18 @@ const MokedApp = () => {
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
   const [user, setUser] = useState(null);
-
-  const staffMembers = ["אורלי מנהלת משאבי אנוש", "משה איש IT", "רונית מנהלת משרד", "יוסי כהן", "דנה לוי", "אבי כהן"];
+  const [staffMembers, setStaffMembers] = useState([]);
   
   useEffect(() => {
-    // eslint-disable-next-line no-undef
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-
-  
-
     const firebaseConfig = {
       apiKey: "AIzaSyCYGDwSDB2zbyJVRgp7I-VPOvv9ujWGvxA",
       authDomain: "lavy-d35b5.firebaseapp.com",
       projectId: "lavy-d35b5",
-      storageBucket: "lavy-d35b5.firebasestorage.app",
+      storageBucket: "lavy-d35b5.appspot.com",
       messagingSenderId: "659061505476",
       appId: "1:659061505476:web:710562e0cc0e4c3a8b7891",
       measurementId: "G-57YEVRRW12"
     };
-
-    if (!firebaseConfig) {
-        console.error("Firebase config not found");
-        setLoading(false);
-        return;
-    }
 
     const app = initializeApp(firebaseConfig);
     const firestoreDb = getFirestore(app);
@@ -207,30 +195,37 @@ const MokedApp = () => {
     return () => unsubscribe();
   }, []);
 
+  // --- אפקט לקריאת הנתונים מ-Firestore ---
   useEffect(() => {
     if (!db || !user) {
         setTickets([]);
+        setStaffMembers([]);
         return;
     };
-
-    // eslint-disable-next-line no-undef
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const ticketsCollectionRef = collection(db, `artifacts/${appId}/public/data/tickets`);
     
-    const unsubscribe = onSnapshot(ticketsCollectionRef, (snapshot) => {
+    // --- תיקון: קריאה מהנתיב הפשוט והנכון ---
+    // האזנה לבקשות
+    const ticketsCollectionRef = collection(db, "tickets");
+    const unsubscribeTickets = onSnapshot(ticketsCollectionRef, (snapshot) => {
       const ticketsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setTickets(ticketsData);
-    });
+    }, (error) => console.error("Error fetching tickets:", error));
 
-    return () => unsubscribe();
+    // האזנה לרשימת העובדים
+    const usersCollectionRef = collection(db, "users");
+    const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => doc.data().displayName);
+        setStaffMembers(usersData);
+    }, (error) => console.error("Error fetching users:", error));
+
+    return () => {
+        unsubscribeTickets();
+        unsubscribeUsers();
+    };
   }, [db, user]);
 
-  // --- פונקציית התחברות עם קוד איתור באגים ---
   const handleLogin = async (username, password) => {
-    if (!auth) {
-        console.error("Auth service is not ready. Aborting login.");
-        throw new Error("Auth service is not available.");
-    }
+    if (!auth) throw new Error("Auth service not ready");
     const email = `${username.toLowerCase()}@lavie.system`;
     await signInWithEmailAndPassword(auth, email, password);
   };
@@ -242,34 +237,22 @@ const MokedApp = () => {
 
   const handleAddTicket = async (newTicketData) => {
     if (!db || !user) return;
-    try {
-        // eslint-disable-next-line no-undef
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const ticketsCollectionRef = collection(db, `artifacts/${appId}/public/data/tickets`);
-        await addDoc(ticketsCollectionRef, {
-            ...newTicketData,
-            requester: user.displayName || user.email.split('@')[0], 
-            status: "פתוח",
-            createdAt: serverTimestamp()
-        });
-        setFormVisible(false);
-    } catch (error) {
-        console.error("Error adding ticket: ", error);
-    }
+    const ticketsCollectionRef = collection(db, "tickets");
+    await addDoc(ticketsCollectionRef, {
+        ...newTicketData,
+        requester: user.displayName || user.email.split('@')[0], 
+        status: "פתוח",
+        createdAt: serverTimestamp()
+    });
+    setFormVisible(false);
   };
 
   const handleUpdateTicket = async (updatedTicket) => {
     if (!db) return;
-    try {
-        // eslint-disable-next-line no-undef
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const ticketDocRef = doc(db, `artifacts/${appId}/public/data/tickets`, updatedTicket.id);
-        const { id, ...ticketData } = updatedTicket;
-        await updateDoc(ticketDocRef, ticketData);
-        setSelectedTicket(null);
-    } catch (error) {
-        console.error("Error updating ticket: ", error);
-    }
+    const ticketDocRef = doc(db, "tickets", updatedTicket.id);
+    const { id, ...ticketData } = updatedTicket;
+    await updateDoc(ticketDocRef, ticketData);
+    setSelectedTicket(null);
   };
   
   const filteredTickets = tickets.filter((t) => t.status === statusFilter);
