@@ -7,7 +7,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות עם טיפול שגיאות משופר ---
+// --- רכיב מסך ההתחברות עם קוד איתור באגים ---
 const LoginScreen = ({ onLogin }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -20,15 +20,10 @@ const LoginScreen = ({ onLogin }) => {
         setIsLoggingIn(true);
         try {
             await onLogin(username, password);
-            // אם ההתחברות מצליחה, הרכיב יוסר מהתצוגה, אין צורך ב-setIsLoggingIn(false) כאן
         } catch (err) {
-            // תפיסת השגיאה מ-Firebase והצגת הודעה למשתמש
-            if (err.code === 'auth/network-request-failed') {
-                setError("בעיית רשת, אנא בדוק את חיבור האינטרנט שלך.");
-            } else {
-                setError("שם המשתמש או הסיסמה שגויים.");
-            }
-            setIsLoggingIn(false); // כיבוי חיווי טעינה רק במקרה של שגיאה
+            console.error("Caught an error during login:", err); // מדפיס את השגיאה המלאה לקונסולה לצורך איתור באגים
+            setError("שם המשתמש או הסיסמה שגויים."); // הצגת הודעה ברורה למשתמש
+            setIsLoggingIn(false);
         }
     };
 
@@ -56,7 +51,7 @@ const LoginScreen = ({ onLogin }) => {
 };
 
 
-// --- רכיבים קיימים (נשארו ללא שינוי) ---
+// --- שאר הרכיבים נשארים ללא שינוי ---
 const NewTicketForm = ({ onClose, onAddTicket, users }) => {
   const [title, setTitle] = useState('');
   const [assignee, setAssignee] = useState(''); 
@@ -177,7 +172,20 @@ const MokedApp = () => {
   
   useEffect(() => {
     // eslint-disable-next-line no-undef
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+
+  
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYGDwSDB2zbyJVRgp7I-VPOvv9ujWGvxA",
+      authDomain: "lavy-d35b5.firebaseapp.com",
+      projectId: "lavy-d35b5",
+      storageBucket: "lavy-d35b5.firebasestorage.app",
+      messagingSenderId: "659061505476",
+      appId: "1:659061505476:web:710562e0cc0e4c3a8b7891",
+      measurementId: "G-57YEVRRW12"
+    };
+
     if (!firebaseConfig) {
         console.error("Firebase config not found");
         setLoading(false);
@@ -217,13 +225,13 @@ const MokedApp = () => {
     return () => unsubscribe();
   }, [db, user]);
 
-  // --- פונקציית התחברות מעודכנת ---
+  // --- פונקציית התחברות עם קוד איתור באגים ---
   const handleLogin = async (username, password) => {
     if (!auth) {
-        console.error("Auth service is not available.");
+        console.error("Auth service is not ready. Aborting login.");
         throw new Error("Auth service is not available.");
     }
-    const email = `${username.toLowerCase()}@lavie.system`; // הרכבת המייל הפיקטיבי
+    const email = `${username.toLowerCase()}@lavie.system`;
     await signInWithEmailAndPassword(auth, email, password);
   };
 
@@ -240,7 +248,6 @@ const MokedApp = () => {
         const ticketsCollectionRef = collection(db, `artifacts/${appId}/public/data/tickets`);
         await addDoc(ticketsCollectionRef, {
             ...newTicketData,
-            // שימוש בשם המשתמש במקום במייל
             requester: user.displayName || user.email.split('@')[0], 
             status: "פתוח",
             createdAt: serverTimestamp()
