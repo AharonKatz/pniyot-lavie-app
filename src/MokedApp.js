@@ -7,9 +7,9 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב חדש למסך ההתחברות ---
+// --- רכיב חדש למסך ההתחברות עם שם משתמש ---
 const LoginScreen = ({ onLogin }) => {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
@@ -17,7 +17,7 @@ const LoginScreen = ({ onLogin }) => {
         e.preventDefault();
         setError('');
         try {
-            await onLogin(email, password);
+            await onLogin(username, password);
         } catch (err) {
             setError("שם המשתמש או הסיסמה שגויים.");
         }
@@ -29,8 +29,8 @@ const LoginScreen = ({ onLogin }) => {
                 <h2>כניסה למערכת</h2>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>אימייל</label>
-                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                        <label>שם משתמש</label>
+                        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -160,12 +160,10 @@ const MokedApp = () => {
   const [loading, setLoading] = useState(true);
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
-  // --- State חדש למשתמש המחובר ---
   const [user, setUser] = useState(null);
 
   const staffMembers = ["אורלי מנהלת משאבי אנוש", "משה איש IT", "רונית מנהלת משרד", "יוסי כהן", "דנה לוי", "אבי כהן"];
   
-  // --- אפקט לאתחול Firebase והאזנה למצב המשתמש ---
   useEffect(() => {
     // eslint-disable-next-line no-undef
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -182,19 +180,17 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    // מאזין לשינויים במצב ההתחברות
     const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
         setUser(currentUser);
         setLoading(false);
     });
 
-    return () => unsubscribe(); // ניתוק ההאזנה
+    return () => unsubscribe();
   }, []);
 
-  // --- אפקט להאזנה לשינויים בבסיס הנתונים (רק אם מחוברים) ---
   useEffect(() => {
     if (!db || !user) {
-        setTickets([]); // איפוס נתונים אם המשתמש לא מחובר
+        setTickets([]);
         return;
     };
 
@@ -208,11 +204,12 @@ const MokedApp = () => {
     });
 
     return () => unsubscribe();
-  }, [db, user]); // תלות במשתמש המחובר
+  }, [db, user]);
 
-  // --- פונקציות לניהול התחברות והתנתקות ---
-  const handleLogin = async (email, password) => {
+  // --- פונקציית התחברות מעודכנת ---
+  const handleLogin = async (username, password) => {
     if (!auth) return;
+    const email = `${username.toLowerCase()}@lavie.system`; // הרכבת המייל הפיקטיבי
     await signInWithEmailAndPassword(auth, email, password);
   };
 
@@ -229,7 +226,8 @@ const MokedApp = () => {
         const ticketsCollectionRef = collection(db, `artifacts/${appId}/public/data/tickets`);
         await addDoc(ticketsCollectionRef, {
             ...newTicketData,
-            requester: user.email, // שימוש במייל של המשתמש המחובר
+            // שימוש בשם המשתמש במקום במייל
+            requester: user.displayName || user.email.split('@')[0], 
             status: "פתוח",
             createdAt: serverTimestamp()
         });
@@ -255,7 +253,6 @@ const MokedApp = () => {
   
   const filteredTickets = tickets.filter((t) => t.status === statusFilter);
 
-  // --- תצוגה מותנית: מסך התחברות או האפליקציה הראשית ---
   if (loading) {
     return <div className="loading-indicator">טוען...</div>;
   }
