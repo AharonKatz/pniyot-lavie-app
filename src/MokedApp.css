@@ -1,0 +1,262 @@
+/* General Layout for the main content */
+.page-container {
+  padding: 20px 30px;
+  background-color: #f8f9fa; 
+}
+
+/* Controls Bar */
+.controls-bar {
+  margin-bottom: 20px;
+}
+
+.title-and-search {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.title-and-search h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #343a40;
+}
+
+.search-container input {
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: 1px solid #ced4da;
+  font-size: 16px;
+  background-color: #e9ecef;
+  width: 250px;
+}
+
+/* Filter Tabs */
+.filter-tabs {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.filter-tabs button {
+  padding: 12px 20px;
+  border: none;
+  background-color: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  margin-left: 10px;
+  border-bottom: 3px solid transparent;
+  position: relative;
+  top: 1px;
+  color: #6c757d;
+}
+
+.filter-tabs button.active {
+  font-weight: bold;
+  color: #E74C3C; 
+  border-bottom-color: #E74C3C;
+}
+
+/* Data Table */
+.data-table-container {
+  background-color: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  border: 1px solid #dee2e6;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  background-color: #3498DB; 
+  color: white;
+  padding: 15px;
+  text-align: right;
+  font-weight: 500;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  padding: 15px;
+  text-align: right;
+  border-bottom: 1px solid #f1f3f5;
+  font-size: 15px;
+  color: #495057;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.priority-גבוהה { color: #E74C3C; font-weight: bold; }
+.priority-בינונית { color: #F39C12; font-weight: bold; }
+.priority-נמוכה { color: #2ECC71; }
+
+/* --- כאן העיצוב המלא והמתוקן של החלון הקופץ --- */
+
+.add-new-btn {
+  background-color: #3498DB;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 24px;
+  line-height: 36px;
+  cursor: pointer;
+  margin-right: auto;
+  margin-left: 15px;
+  transition: background-color 0.2s;
+}
+
+.add-new-btn:hover {
+  background-color: #2980b9;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  position: relative;
+  background-color: white;
+  padding: 40px;
+  border-radius: 12px;
+  width: 600px;
+  max-width: 90%;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+}
+
+.close-modal-btn {
+  position: absolute;
+  top: 15px;
+  left: 15px; /* Changed from right to left for RTL consistency */
+  background: #f1f1f1;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
+  line-height: 30px;
+  text-align: center;
+  cursor: pointer;
+  color: #aaa;
+}
+
+.close-modal-btn:hover {
+    background: #e0e0e0;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  text-align: center;
+  margin-bottom: 30px;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font-size: 16px;
+}
+
+.form-actions {
+  margin-top: 30px;
+  display: flex;
+  justify-content: flex-start; /* Changed to flex-start for RTL */
+}
+
+.btn-submit {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 10px; /* Changed from margin-right */
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.btn-cancel {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* --- עיצוב חדש למסך ההתחברות --- */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f8f9fa;
+}
+
+.login-box {
+    padding: 40px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    width: 400px;
+    text-align: center;
+}
+
+.login-box h2 {
+    margin-bottom: 25px;
+}
+
+.error-message {
+    color: #dc3545;
+    margin-bottom: 15px;
+}
+
+/* --- עיצוב חדש לכפתור התנתקות (ב-NavBar) --- */
+.user-email {
+    margin-left: 15px;
+    font-weight: 500;
+}
+
+.logout-btn {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
