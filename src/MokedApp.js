@@ -17,13 +17,18 @@ const LoginScreen = ({ onLogin }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        setIsLoggingIn(true); // הפעלת חיווי טעינה
+        setIsLoggingIn(true);
         try {
             await onLogin(username, password);
+            // אם ההתחברות מצליחה, הרכיב יוסר מהתצוגה, אין צורך ב-setIsLoggingIn(false) כאן
         } catch (err) {
             // תפיסת השגיאה מ-Firebase והצגת הודעה למשתמש
-            setError("שם המשתמש או הסיסמה שגויים.");
-            setIsLoggingIn(false); // כיבוי חיווי טעינה
+            if (err.code === 'auth/network-request-failed') {
+                setError("בעיית רשת, אנא בדוק את חיבור האינטרנט שלך.");
+            } else {
+                setError("שם המשתמש או הסיסמה שגויים.");
+            }
+            setIsLoggingIn(false); // כיבוי חיווי טעינה רק במקרה של שגיאה
         }
     };
 
@@ -214,7 +219,10 @@ const MokedApp = () => {
 
   // --- פונקציית התחברות מעודכנת ---
   const handleLogin = async (username, password) => {
-    if (!auth) return;
+    if (!auth) {
+        console.error("Auth service is not available.");
+        throw new Error("Auth service is not available.");
+    }
     const email = `${username.toLowerCase()}@lavie.system`; // הרכבת המייל הפיקטיבי
     await signInWithEmailAndPassword(auth, email, password);
   };
