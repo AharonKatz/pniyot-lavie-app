@@ -1,7 +1,12 @@
-import MokedApp from "./MokedApp";
+import React from "react"
+import MokedApp from "./MokedApp"
 
 function App() {
-  return <MokedApp />;
+  return (
+    <div>
+      <MokedApp />
+    </div>
+  )
 }
 
-export default App;
+export default App

@@ -1,64 +1,35 @@
-/* בסיס כללי */
+/* App.css */
 body {
   margin: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f9fafb;
+  padding: 0;
+  font-family: 'Rubik', 'Assistant', sans-serif;
+  background-color: #f4f4f4;
+  color: #1a1a1a;
   direction: rtl;
 }
 
-/* אפליקציה כללית */
 .App {
-  text-align: right;
-  padding: 1rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
 }
 
-/* קונטיינר עמוד */
 .page-container {
   max-width: 1200px;
-  margin: auto;
-  padding: 1rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
 }
 
-/* התאמה למצב כהה (לא חובה) */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #1e1e1e;
-    color: #f5f5f5;
-  }
+h1, h2, h3 {
+  text-align: right;
+}
 
-  .ticket-toolbar .search-box {
-    background: #333;
-    border-color: #444;
-    color: #f5f5f5;
-  }
+input::placeholder {
+  text-align: right;
+  font-family: inherit;
+}
 
-  .ticket-toolbar .search-box input {
-    color: #f5f5f5;
-  }
-
-  .ticket-toolbar .status-filters button {
-    background: #444;
-    border-color: #555;
-    color: #ddd;
-  }
-
-  .ticket-toolbar .status-filters button.active {
-    background: #7c3aed;
-    color: white;
-  }
-
-  .ticket-row {
-    background: #2c2c2c;
-    color: #f5f5f5;
-    border-bottom: 1px solid #444;
-  }
-
-  .ticket-row:hover {
-    background: #3a3a3a;
-  }
-
-  .ticket-table-header {
-    background: #5b21b6;
-    color: white;
-  }
+button {
+  font-family: inherit;
 }

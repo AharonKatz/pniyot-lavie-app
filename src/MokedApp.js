@@ -1,27 +1,31 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import NavBar from "./NavBar";
 import "./MokedApp.css"; 
 
 // --- ייבוא כל מה שצריך מ-Firebase ---
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
 
 // --- רכיב מסך ההתחברות ---
-const LoginScreen = ({ onLogin }) => {
-    const [username, setUsername] = useState('');
+const LoginScreen = ({ onLogin, users }) => {
+    const [selectedUser, setSelectedUser] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!selectedUser) {
+            setError("יש לבחור שם משתמש.");
+            return;
+        }
         setError('');
         setIsLoggingIn(true);
         try {
-            await onLogin(username, password);
+            await onLogin(selectedUser, password);
         } catch (err) {
-            setError("שם המשתמש או הסיסמה שגויים.");
+            setError("הסיסמה שגויה.");
             setIsLoggingIn(false);
         }
     };
@@ -33,7 +37,14 @@ const LoginScreen = ({ onLogin }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם משתמש</label>
-                        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
+                        <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} required>
+                            <option value="" disabled>בחר את שמך מהרשימה</option>
+                            {users.map(user => (
+                                <option key={user.username} value={user.username}>
+                                    {user.displayName}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -50,8 +61,8 @@ const LoginScreen = ({ onLogin }) => {
 };
 
 
-// --- רכיב טופס יצירת בקשה ---
-const NewTicketForm = ({ onClose, onAddTicket, users }) => {
+// --- רכיב טופס יצירת משימה ---
+const NewTaskForm = ({ onClose, onAddTask, users }) => {
   const [title, setTitle] = useState('');
   const [assignee, setAssignee] = useState(''); 
   const [priority, setPriority] = useState('בינונית');
@@ -60,20 +71,20 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title || !assignee) {
-      alert("יש למלא נושא ולבחור למי מיועדת הבקשה.");
+      alert("יש למלא נושא ולבחור למי מיועדת המשימה.");
       return;
     }
-    onAddTicket({ title, assignee, priority, description });
+    onAddTask({ title, assignee, priority, description });
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}> 
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <button className="close-modal-btn" onClick={onClose}>&times;</button>
-        <h2>יצירת בקשה חדשה</h2>
+        <h2>יצירת משימה חדשה</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>נושא הבקשה</label>
+            <label>נושא המשימה</label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="form-group">
@@ -81,7 +92,7 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
             <select value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
               <option value="" disabled>בחר איש צוות</option>
               {users.map(user => (
-                <option key={user} value={user}>{user}</option>
+                <option key={user.username} value={user.displayName}>{user.displayName}</option>
               ))}
             </select>
           </div>
@@ -98,7 +109,7 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="4"></textarea>
           </div>
           <div className="form-actions">
-            <button type="submit" className="btn-submit">צור בקשה</button>
+            <button type="submit" className="btn-submit">צור משימה</button>
             <button type="button" className="btn-cancel" onClick={onClose}>ביטול</button>
           </div>
         </form>
@@ -107,47 +118,57 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
   );
 };
 
-// --- רכיב פרטי בקשה ---
-const TicketDetails = ({ ticket, users, onUpdateTicket, onClose }) => {
-    const [newAssignee, setNewAssignee] = useState(ticket.assignee);
+// --- רכיב פרטי משימה ---
+const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile }) => {
+    const [newAssignee, setNewAssignee] = useState(task.assignee);
 
     const handleReassign = () => {
-        onUpdateTicket({ ...ticket, assignee: newAssignee });
+        const currentUserDisplayName = currentUserProfile.displayName;
+        
+        const newFollowers = task.followers ? [...task.followers] : [task.requester];
+        if (!newFollowers.includes(currentUserDisplayName)) {
+            newFollowers.push(currentUserDisplayName);
+        }
+
+        onUpdateTask({ 
+            ...task, 
+            assignee: newAssignee,
+            status: 'פתוח', 
+            followers: newFollowers
+        });
     };
 
     const handleClose = () => {
-        onUpdateTicket({ ...ticket, status: 'סגור' });
+        onUpdateTask({ ...task, status: 'סגור' });
     };
 
     return (
         <div className="details-container">
             <div className="details-header">
-                {/* שינוי 1: הצגת מספר עולה במקום גיבריש */}
-                <h2>פרטי בקשה #{ticket.ticketNumber}</h2>
+                <h2>פרטי משימה #{task.taskNumber}</h2>
                 <button onClick={onClose} className="btn-back">חזור לטבלה</button>
             </div>
             <div className="details-content">
-                <h3>{ticket.title}</h3>
-                <p><strong>מאת:</strong> {ticket.requester}</p>
-                <p><strong>מיועד ל:</strong> {ticket.assignee}</p>
-                <p><strong>סטטוס:</strong> {ticket.status}</p>
-                <p><strong>עדיפות:</strong> {ticket.priority}</p>
-                <p><strong>תאריך יצירה:</strong> {formatDate(ticket.createdAt)}</p>
+                <h3>{task.title}</h3>
+                <p><strong>מאת:</strong> {task.requester}</p>
+                <p><strong>מיועד ל:</strong> {task.assignee}</p>
+                <p><strong>סטטוס:</strong> {task.status}</p>
+                <p><strong>עדיפות:</strong> {task.priority}</p>
+                <p><strong>תאריך יצירה:</strong> {formatDate(task.createdAt)}</p>
                 <div className="details-description">
                     <strong>תיאור:</strong>
-                    <p>{ticket.description}</p>
+                    <p>{task.description}</p>
                 </div>
             </div>
-            {/* שינוי 3: הסתרת פעולות אם הפניה סגורה */}
-            {ticket.status !== 'סגור' && (
+            {task.status !== 'סגור' && (
                 <div className="details-actions">
                     <div className="reassign-action">
                         <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                            {users.map(user => <option key={user} value={user}>{user}</option>)}
+                            {users.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
                         </select>
                         <button onClick={handleReassign} className="btn-reassign">העבר</button>
                     </div>
-                    <button onClick={handleClose} className="btn-close-ticket">סגור בקשה</button>
+                    <button onClick={handleClose} className="btn-close-ticket">סגור משימה</button>
                 </div>
             )}
         </div>
@@ -164,14 +185,15 @@ const formatDate = (dateString) => {
 const MokedApp = () => {
   const [statusFilter, setStatusFilter] = useState("פתוח");
   const [isFormVisible, setFormVisible] = useState(false); 
-  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
   
-  const [tickets, setTickets] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
   const [user, setUser] = useState(null);
   const [staffMembers, setStaffMembers] = useState([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   
   useEffect(() => {
     const firebaseConfig = {
@@ -191,37 +213,57 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-        setUser(currentUser);
-        setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!db || !user) {
-        setTickets([]);
-        setStaffMembers([]);
-        return;
-    };
-    
-    const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
-    const unsubscribeTickets = onSnapshot(ticketsQuery, (snapshot) => {
-      const ticketsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      setTickets(ticketsData);
-    });
-
-    const usersCollectionRef = collection(db, "users");
-    const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-        const usersData = snapshot.docs.map(doc => doc.data().displayName);
+    const usersCollectionRef = collection(firestoreDb, "users");
+    onSnapshot(usersCollectionRef, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => doc.data());
         setStaffMembers(usersData);
     });
 
-    return () => {
-        unsubscribeTickets();
-        unsubscribeUsers();
+    let unsubscribe = () => {};
+    const setupAuth = async () => {
+        try {
+            await setPersistence(firebaseAuth, browserSessionPersistence);
+            unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+                setUser(currentUser);
+                setLoading(false);
+            });
+        } catch (error) {
+            console.error("Error setting persistence:", error);
+            setLoading(false);
+        }
     };
+
+    setupAuth();
+
+    return () => {
+        unsubscribe();
+    };
+  }, []);
+
+  // --- אפקט חדש: קישור בין המשתמש המחובר לפרופיל שלו ---
+  useEffect(() => {
+    if (user && staffMembers.length > 0) {
+        const username = user.email.split('@')[0];
+        const profile = staffMembers.find(member => member.username === username);
+        setCurrentUserProfile(profile);
+    } else {
+        setCurrentUserProfile(null);
+    }
+  }, [user, staffMembers]);
+
+  useEffect(() => {
+    if (!db || !user) {
+        setTasks([]);
+        return;
+    };
+    
+    const tasksQuery = query(collection(db, "tasks"), orderBy("taskNumber", "desc"));
+    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setTasks(tasksData);
+    });
+
+    return () => unsubscribeTasks();
   }, [db, user]);
 
   const handleLogin = async (username, password) => {
@@ -235,34 +277,50 @@ const MokedApp = () => {
     await signOut(auth);
   };
 
-  const handleAddTicket = async (newTicketData) => {
-    if (!db || !user) return;
-    const ticketsCollectionRef = collection(db, "tickets");
+  const handleAddTask = async (newTaskData) => {
+    if (!db || !currentUserProfile) return;
+    const tasksCollectionRef = collection(db, "tasks");
 
-    // שינוי 1: לוגיקה לקביעת מספר עולה
-    const counterQuery = query(ticketsCollectionRef, orderBy("ticketNumber", "desc"), limit(1));
-    const lastTicketSnapshot = await getDocs(counterQuery);
-    const lastTicketNumber = lastTicketSnapshot.empty ? 0 : lastTicketSnapshot.docs[0].data().ticketNumber;
+    const counterQuery = query(tasksCollectionRef, orderBy("taskNumber", "desc"), limit(1));
+    const lastTaskSnapshot = await getDocs(counterQuery);
+    const lastTaskNumber = lastTaskSnapshot.empty ? 0 : lastTaskSnapshot.docs[0].data().taskNumber;
+    
+    const requesterName = currentUserProfile.displayName;
 
-    await addDoc(ticketsCollectionRef, {
-        ...newTicketData,
-        requester: user.displayName || user.email.split('@')[0], 
+    await addDoc(tasksCollectionRef, {
+        ...newTaskData,
+        requester: requesterName, 
         status: "פתוח",
         createdAt: serverTimestamp(),
-        ticketNumber: lastTicketNumber + 1 // המספר החדש
+        taskNumber: lastTaskNumber + 1,
+        followers: [requesterName]
     });
     setFormVisible(false);
   };
 
-  const handleUpdateTicket = async (updatedTicket) => {
+  const handleUpdateTask = async (updatedTask) => {
     if (!db) return;
-    const ticketDocRef = doc(db, "tickets", updatedTicket.id);
-    const { id, ...ticketData } = updatedTicket;
-    await updateDoc(ticketDocRef, ticketData);
-    setSelectedTicket(null);
+    const taskDocRef = doc(db, "tasks", updatedTask.id);
+    const { id, ...taskData } = updatedTask;
+    await updateDoc(taskDocRef, taskData);
+    setSelectedTask(null);
   };
   
-  const filteredTickets = tickets.filter((t) => t.status === statusFilter);
+  const filteredTasks = useMemo(() => {
+    if (!currentUserProfile) return [];
+    const currentUserDisplayName = currentUserProfile.displayName;
+    
+    if (statusFilter === 'פתוח') {
+        return tasks.filter(t => t.assignee === currentUserDisplayName && t.status === 'פתוח');
+    }
+    if (statusFilter === 'במעקב') {
+        return tasks.filter(t => t.assignee !== currentUserDisplayName && t.status === 'במעקב' && t.followers && t.followers.includes(currentUserDisplayName));
+    }
+    if (statusFilter === 'סגור') {
+        return tasks.filter(t => t.status === 'סגור' && (t.assignee === currentUserDisplayName || (t.followers && t.followers.includes(currentUserDisplayName))));
+    }
+    return [];
+  }, [tasks, statusFilter, currentUserProfile]);
 
   if (loading) {
     return <div className="loading-indicator">טוען...</div>;
@@ -274,23 +332,24 @@ const MokedApp = () => {
 
   return (
     <div className="App" dir="rtl">
-      {isFormVisible && <NewTicketForm onClose={() => setFormVisible(false)} onAddTicket={handleAddTicket} users={staffMembers} />}
+      {isFormVisible && <NewTaskForm onClose={() => setFormVisible(false)} onAddTask={handleAddTask} users={staffMembers} />}
       
-      <NavBar user={user} onLogout={handleLogout} />
+      <NavBar userProfile={currentUserProfile} onLogout={handleLogout} />
       <div className="page-container">
         
-        {selectedTicket ? (
-            <TicketDetails 
-                ticket={selectedTicket} 
+        {selectedTask ? (
+            <TaskDetails 
+                task={selectedTask} 
                 users={staffMembers}
-                onUpdateTicket={handleUpdateTicket}
-                onClose={() => setSelectedTicket(null)}
+                onUpdateTask={handleUpdateTask}
+                onClose={() => setSelectedTask(null)}
+                currentUserProfile={currentUserProfile}
             />
         ) : (
             <>
                 <div className="controls-bar">
                 <div className="title-and-search">
-                    <h1>מוקד פניות</h1>
+                    <h1>ניהול משימות</h1>
                     <button className="add-new-btn" onClick={() => setFormVisible(true)}>+</button>
                     <div className="search-container">
                     <input type="text" placeholder="חפש..." />
@@ -310,7 +369,7 @@ const MokedApp = () => {
                     <thead>
                     <tr>
                         <th>#</th>
-                        <th>נושא הבקשה</th>
+                        <th>נושא המשימה</th>
                         <th>מיועד ל-</th>
                         <th>עדיפות</th>
                         <th>סטטוס</th>
@@ -318,15 +377,14 @@ const MokedApp = () => {
                     </tr>
                     </thead>
                     <tbody>
-                    {filteredTickets.map((ticket) => (
-                        <tr key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="clickable-row">
-                        {/* שינוי 1: הצגת מספר עולה במקום גיבריש */}
-                        <td>{ticket.ticketNumber}</td>
-                        <td>{ticket.title}</td>
-                        <td>{ticket.assignee}</td>
-                        <td className={`priority-${ticket.priority}`}>{ticket.priority}</td>
-                        <td>{ticket.status}</td>
-                        <td>{formatDate(ticket.createdAt)}</td>
+                    {filteredTasks.map((task) => (
+                        <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
+                        <td>{task.taskNumber}</td>
+                        <td>{task.title}</td>
+                        <td>{task.assignee}</td>
+                        <td className={`priority-${task.priority}`}>{task.priority}</td>
+                        <td>{task.status}</td>
+                        <td>{formatDate(task.createdAt)}</td>
                         </tr>
                     ))}
                     </tbody>
