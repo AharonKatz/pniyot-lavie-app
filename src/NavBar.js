@@ -16,7 +16,8 @@ const NavBar = ({ userProfile, onLogout }) => {
       </div>
       
       <nav className="main-nav">
-        <a href="#">משימות</a>
+        {/* תיקון: שינוי הקישור כך שיוביל לדף הבית */}
+        <a href="/">משימות</a>
       </nav>
       
       <div className="user-menu">
