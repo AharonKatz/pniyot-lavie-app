@@ -4,6 +4,16 @@
   background-color: #f8f9fa; 
 }
 
+/* Loading Indicator */
+.loading-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+    font-size: 24px;
+    color: #6c757d;
+}
+
 /* Controls Bar */
 .controls-bar {
   margin-bottom: 20px;
@@ -89,16 +99,19 @@
   color: #495057;
 }
 
-.data-table tbody tr:hover {
-  background-color: #f8f9fa;
+.clickable-row {
+    cursor: pointer;
+}
+
+.clickable-row:hover {
+  background-color: #f0f8ff !important;
 }
 
 .priority-גבוהה { color: #E74C3C; font-weight: bold; }
 .priority-בינונית { color: #F39C12; font-weight: bold; }
 .priority-נמוכה { color: #2ECC71; }
 
-/* --- כאן העיצוב המלא והמתוקן של החלון הקופץ --- */
-
+/* New Ticket Modal */
 .add-new-btn {
   background-color: #3498DB;
   color: white;
@@ -140,11 +153,11 @@
   max-width: 90%;
   box-shadow: 0 5px 20px rgba(0,0,0,0.25);
 }
-
+  
 .close-modal-btn {
   position: absolute;
   top: 15px;
-  left: 15px; /* Changed from right to left for RTL consistency */
+  left: 15px;
   background: #f1f1f1;
   border: none;
   border-radius: 50%;
@@ -193,7 +206,7 @@
 .form-actions {
   margin-top: 30px;
   display: flex;
-  justify-content: flex-start; /* Changed to flex-start for RTL */
+  justify-content: flex-start;
 }
 
 .btn-submit {
@@ -203,7 +216,7 @@
   padding: 12px 22px;
   border-radius: 6px;
   cursor: pointer;
-  margin-left: 10px; /* Changed from margin-right */
+  margin-left: 10px;
   font-size: 16px;
   font-weight: 500;
 }
@@ -219,7 +232,102 @@
   font-weight: 500;
 }
 
-/* --- עיצוב חדש למסך ההתחברות --- */
+/* Centered Ticket Details View */
+.details-container {
+  background-color: #ffffff;
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+  border: 1px solid #dee2e6;
+  max-width: 800px;
+  margin: 20px auto;
+}
+
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+  margin-bottom: 25px;
+}
+
+.details-header h2 {
+  margin: 0;
+  color: #343a40;
+}
+
+.btn-back {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.details-content p {
+  font-size: 16px;
+  line-height: 1.7;
+  color: #495057;
+}
+
+.details-content p strong {
+    color: #212529;
+}
+
+.details-description {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.details-actions {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reassign-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reassign-action select {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}
+
+.btn-reassign {
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-close-ticket {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* Login Screen */
 .login-container {
     display: flex;
     justify-content: center;
@@ -244,19 +352,4 @@
 .error-message {
     color: #dc3545;
     margin-bottom: 15px;
-}
-
-/* --- עיצוב חדש לכפתור התנתקות (ב-NavBar) --- */
-.user-email {
-    margin-left: 15px;
-    font-weight: 500;
-}
-
-.logout-btn {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-    border-radius: 5px;
-    padding: 5px 10px;
-    cursor: pointer;
 }

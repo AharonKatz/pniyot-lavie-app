@@ -4,28 +4,24 @@ import "./MokedApp.css";
 
 // --- ייבוא כל מה שצריך מ-Firebase ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות עם רשימה נפתחת ---
-const LoginScreen = ({ onLogin, users }) => {
-    const [selectedUser, setSelectedUser] = useState('');
+// --- רכיב מסך ההתחברות ---
+const LoginScreen = ({ onLogin }) => {
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedUser) {
-            setError("יש לבחור שם משתמש.");
-            return;
-        }
         setError('');
         setIsLoggingIn(true);
         try {
-            await onLogin(selectedUser, password);
+            await onLogin(username, password);
         } catch (err) {
-            setError("הסיסמה שגויה.");
+            setError("שם המשתמש או הסיסמה שגויים.");
             setIsLoggingIn(false);
         }
     };
@@ -37,14 +33,7 @@ const LoginScreen = ({ onLogin, users }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם משתמש</label>
-                        <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} required>
-                            <option value="" disabled>בחר את שמך מהרשימה</option>
-                            {users.map(user => (
-                                <option key={user.username} value={user.username}>
-                                    {user.displayName}
-                                </option>
-                            ))}
-                        </select>
+                        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -92,7 +81,7 @@ const NewTicketForm = ({ onClose, onAddTicket, users }) => {
             <select value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
               <option value="" disabled>בחר איש צוות</option>
               {users.map(user => (
-                <option key={user.username} value={user.displayName}>{user.displayName}</option>
+                <option key={user} value={user}>{user}</option>
               ))}
             </select>
           </div>
@@ -133,7 +122,8 @@ const TicketDetails = ({ ticket, users, onUpdateTicket, onClose }) => {
     return (
         <div className="details-container">
             <div className="details-header">
-                <h2>פרטי בקשה #{ticket.id.substring(0, 6)}...</h2>
+                {/* שינוי 1: הצגת מספר עולה במקום גיבריש */}
+                <h2>פרטי בקשה #{ticket.ticketNumber}</h2>
                 <button onClick={onClose} className="btn-back">חזור לטבלה</button>
             </div>
             <div className="details-content">
@@ -148,15 +138,18 @@ const TicketDetails = ({ ticket, users, onUpdateTicket, onClose }) => {
                     <p>{ticket.description}</p>
                 </div>
             </div>
-            <div className="details-actions">
-                <div className="reassign-action">
-                    <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                        {users.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
-                    </select>
-                    <button onClick={handleReassign} className="btn-reassign">העבר</button>
+            {/* שינוי 3: הסתרת פעולות אם הפניה סגורה */}
+            {ticket.status !== 'סגור' && (
+                <div className="details-actions">
+                    <div className="reassign-action">
+                        <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
+                            {users.map(user => <option key={user} value={user}>{user}</option>)}
+                        </select>
+                        <button onClick={handleReassign} className="btn-reassign">העבר</button>
+                    </div>
+                    <button onClick={handleClose} className="btn-close-ticket">סגור בקשה</button>
                 </div>
-                <button onClick={handleClose} className="btn-close-ticket">סגור בקשה</button>
-            </div>
+            )}
         </div>
     );
 };
@@ -198,13 +191,6 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    // קריאה ראשונית של רשימת המשתמשים, עוד לפני ההתחברות
-    const usersCollectionRef = collection(firestoreDb, "users");
-    onSnapshot(usersCollectionRef, (snapshot) => {
-        const usersData = snapshot.docs.map(doc => doc.data());
-        setStaffMembers(usersData);
-    });
-
     const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
         setUser(currentUser);
         setLoading(false);
@@ -216,16 +202,26 @@ const MokedApp = () => {
   useEffect(() => {
     if (!db || !user) {
         setTickets([]);
+        setStaffMembers([]);
         return;
     };
     
-    const ticketsCollectionRef = collection(db, "tickets");
-    const unsubscribeTickets = onSnapshot(ticketsCollectionRef, (snapshot) => {
+    const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
+    const unsubscribeTickets = onSnapshot(ticketsQuery, (snapshot) => {
       const ticketsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setTickets(ticketsData);
     });
 
-    return () => unsubscribeTickets();
+    const usersCollectionRef = collection(db, "users");
+    const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => doc.data().displayName);
+        setStaffMembers(usersData);
+    });
+
+    return () => {
+        unsubscribeTickets();
+        unsubscribeUsers();
+    };
   }, [db, user]);
 
   const handleLogin = async (username, password) => {
@@ -242,11 +238,18 @@ const MokedApp = () => {
   const handleAddTicket = async (newTicketData) => {
     if (!db || !user) return;
     const ticketsCollectionRef = collection(db, "tickets");
+
+    // שינוי 1: לוגיקה לקביעת מספר עולה
+    const counterQuery = query(ticketsCollectionRef, orderBy("ticketNumber", "desc"), limit(1));
+    const lastTicketSnapshot = await getDocs(counterQuery);
+    const lastTicketNumber = lastTicketSnapshot.empty ? 0 : lastTicketSnapshot.docs[0].data().ticketNumber;
+
     await addDoc(ticketsCollectionRef, {
         ...newTicketData,
         requester: user.displayName || user.email.split('@')[0], 
         status: "פתוח",
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        ticketNumber: lastTicketNumber + 1 // המספר החדש
     });
     setFormVisible(false);
   };
@@ -317,7 +320,8 @@ const MokedApp = () => {
                     <tbody>
                     {filteredTickets.map((ticket) => (
                         <tr key={ticket.id} onClick={() => setSelectedTicket(ticket)} className="clickable-row">
-                        <td>{ticket.id.substring(0, 6)}...</td>
+                        {/* שינוי 1: הצגת מספר עולה במקום גיבריש */}
+                        <td>{ticket.ticketNumber}</td>
                         <td>{ticket.title}</td>
                         <td>{ticket.assignee}</td>
                         <td className={`priority-${ticket.priority}`}>{ticket.priority}</td>
