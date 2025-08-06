@@ -2,10 +2,10 @@ import React from 'react';
 import logo from './lavie-logo.png'; 
 import './NavBar.css'; 
 
-const NavBar = ({ user, onLogout }) => {
-  const getUsername = (user) => {
-    if (!user) return '';
-    return user.displayName || user.email.split('@')[0];
+const NavBar = ({ userProfile, onLogout }) => {
+  const getUsername = () => {
+    if (!userProfile) return '';
+    return userProfile.displayName;
   }
 
   return (
@@ -20,7 +20,7 @@ const NavBar = ({ user, onLogout }) => {
       </nav>
       
       <div className="user-menu">
-        <span className="user-email">{getUsername(user)}</span>
+        <span className="user-email">{getUsername()}</span>
         <button onClick={onLogout} className="logout-btn">התנתק</button>
       </div>
 
