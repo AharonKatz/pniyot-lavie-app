@@ -1,42 +1,6 @@
 import React, { useState } from "react";
 import "./TicketList.css";
 
-const demoTickets = [
-  {
-    id: 1,
-    createdAt: "2024-07-28",
-    firstName: "דנה",
-    lastName: "כהן",
-    phone: "050-1234567",
-    type: "שאלה",
-    source: "טלפון",
-    status: "פתוח",
-    openedBy: "אהרון כץ"
-  },
-  {
-    id: 2,
-    createdAt: "2024-07-27",
-    firstName: "יוסי",
-    lastName: "לוי",
-    phone: "052-9876543",
-    type: "בקשה",
-    source: "אתר",
-    status: "בטיפול",
-    openedBy: "דנה כהן"
-  },
-  {
-    id: 3,
-    createdAt: "2024-07-26",
-    firstName: "שרה",
-    lastName: "פרץ",
-    phone: "053-5555555",
-    type: "בעיה",
-    source: "אפליקציה",
-    status: "סגור",
-    openedBy: "אהרון כץ"
-  }
-];
-
 export default function TicketList() {
   const [status, setStatus] = useState("פתוח");
   const filtered = demoTickets.filter(t => status === "פתוח" || t.status === status);
