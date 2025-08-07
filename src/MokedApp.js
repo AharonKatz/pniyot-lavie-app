@@ -7,7 +7,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות עם שדה שם מלא ---
+// --- רכיב מסך ההתחברות ---
 const LoginScreen = ({ onLogin, users }) => {
     const [fullName, setFullName] = useState('');
     const [password, setPassword] = useState('');
@@ -172,7 +172,8 @@ const EditTaskModal = ({ task, onClose, onUpdateTask, users }) => {
 
 // --- רכיב פרטי משימה ---
 const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, onEditTask }) => {
-    const [newAssignee, setNewAssignee] = useState(task.assignee);
+    const availableUsersToReassign = users.filter(user => user.displayName !== task.assignee);
+    const [newAssignee, setNewAssignee] = useState(availableUsersToReassign.length > 0 ? availableUsersToReassign[0].displayName : '');
 
     const handleReassign = () => {
         const currentUserDisplayName = currentUserProfile.displayName;
@@ -187,6 +188,7 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
         onUpdateTask({ ...task, status: 'סגור' });
     };
     
+    // --- שינוי: התנאי המרכזי שקובע אם להציג את כפתורי הפעולה ---
     const isCurrentUserAssignee = currentUserProfile.displayName === task.assignee;
 
     return (
@@ -194,6 +196,7 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
             <div className="details-header">
                 <h2>פרטי משימה #{task.taskNumber}</h2>
                 <div className="header-actions">
+                    {/* --- שינוי: התנאי הזה נשאר זהה --- */}
                     {isCurrentUserAssignee && task.status !== 'סגור' && (
                         <button onClick={() => onEditTask(task)} className="btn-edit">ערוך</button>
                     )}
@@ -212,11 +215,12 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
                     <p>{task.description}</p>
                 </div>
             </div>
-            {task.status !== 'סגור' && (
+            {/* --- שינוי: הוספת התנאי isCurrentUserAssignee --- */}
+            {isCurrentUserAssignee && task.status !== 'סגור' && (
                 <div className="details-actions">
                     <div className="reassign-action">
                         <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                            {users.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
+                            {availableUsersToReassign.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
                         </select>
                         <button onClick={handleReassign} className="btn-reassign">העבר</button>
                     </div>
