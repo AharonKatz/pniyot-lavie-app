@@ -257,6 +257,13 @@
   color: #343a40;
 }
 
+/* --- עיצוב חדש לכפתורים בראש העמוד --- */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* רווח בין הכפתורים */
+}
+
 .btn-back {
   background-color: #6c757d;
   color: white;
@@ -265,6 +272,17 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 15px;
+}
+
+.btn-edit {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
 }
 
 .details-content p {
