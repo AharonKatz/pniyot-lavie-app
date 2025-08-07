@@ -7,25 +7,21 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
 
-// --- רכיב מסך ההתחברות ---
+// --- רכיב מסך ההתחברות עם שדה שם מלא ---
 const LoginScreen = ({ onLogin, users }) => {
-    const [selectedUser, setSelectedUser] = useState('');
+    const [fullName, setFullName] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedUser) {
-            setError("יש לבחור שם משתמש.");
-            return;
-        }
         setError('');
         setIsLoggingIn(true);
         try {
-            await onLogin(selectedUser, password);
+            await onLogin(fullName, password);
         } catch (err) {
-            setError("הסיסמה שגויה.");
+            setError("שם המשתמש או הסיסמה שגויים.");
             setIsLoggingIn(false);
         }
     };
@@ -36,15 +32,8 @@ const LoginScreen = ({ onLogin, users }) => {
                 <h2>כניסה למערכת</h2>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>שם משתמש</label>
-                        <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} required>
-                            <option value="" disabled>בחר את שמך מהרשימה</option>
-                            {users.map(user => (
-                                <option key={user.username} value={user.username}>
-                                    {user.displayName}
-                                </option>
-                            ))}
-                        </select>
+                        <label>שם מלא</label>
+                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="לדוגמה: גד כהנא" />
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -70,8 +59,8 @@ const NewTaskForm = ({ onClose, onAddTask, users }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!title || !assignee) {
-      alert("יש למלא נושא ולבחור למי מיועדת המשימה.");
+    if (!title) {
+      alert("יש למלא נושא למשימה.");
       return;
     }
     onAddTask({ title, assignee, priority, description });
@@ -88,9 +77,9 @@ const NewTaskForm = ({ onClose, onAddTask, users }) => {
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="form-group">
-            <label>מיועד ל-</label>
-            <select value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
-              <option value="" disabled>בחר איש צוות</option>
+            <label>מיועד ל- (אופציונלי)</label>
+            <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+              <option value="">-- הקצה לעצמך --</option>
               {users.map(user => (
                 <option key={user.username} value={user.displayName}>{user.displayName}</option>
               ))}
@@ -240,7 +229,6 @@ const MokedApp = () => {
     };
   }, []);
 
-  // --- אפקט חדש: קישור בין המשתמש המחובר לפרופיל שלו ---
   useEffect(() => {
     if (user && staffMembers.length > 0) {
         const username = user.email.split('@')[0];
@@ -266,9 +254,15 @@ const MokedApp = () => {
     return () => unsubscribeTasks();
   }, [db, user]);
 
-  const handleLogin = async (username, password) => {
+  const handleLogin = async (fullName, password) => {
     if (!auth) throw new Error("Auth service not ready");
-    const email = `${username.toLowerCase()}@lavie.system`;
+    
+    const userToLogin = staffMembers.find(member => member.displayName === fullName);
+    if (!userToLogin) {
+        throw new Error("User not found");
+    }
+
+    const email = `${userToLogin.username.toLowerCase()}@lavie.system`;
     await signInWithEmailAndPassword(auth, email, password);
   };
 
@@ -286,9 +280,11 @@ const MokedApp = () => {
     const lastTaskNumber = lastTaskSnapshot.empty ? 0 : lastTaskSnapshot.docs[0].data().taskNumber;
     
     const requesterName = currentUserProfile.displayName;
+    const finalAssignee = newTaskData.assignee || requesterName;
 
     await addDoc(tasksCollectionRef, {
         ...newTaskData,
+        assignee: finalAssignee,
         requester: requesterName, 
         status: "פתוח",
         createdAt: serverTimestamp(),
