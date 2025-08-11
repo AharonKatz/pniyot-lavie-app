@@ -33,7 +33,7 @@ const LoginScreen = ({ onLogin, users }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם מלא</label>
-                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="לדוגמה: גד כהנא" />
+                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
