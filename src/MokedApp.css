@@ -24,6 +24,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+  flex-wrap: wrap; /* Allows wrapping on small screens */
+  gap: 15px;
 }
 
 .title-and-search h1 {
@@ -70,7 +72,7 @@
 .data-table-container {
   background-color: #ffffff;
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto; /* מאפשר גלילה לצדדים במסכים קטנים */
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   border: 1px solid #dee2e6;
 }
@@ -78,6 +80,7 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 800px; /* רוחב מינימלי כדי לגרום לגלילה להופיע כשצריך */
 }
 
 .data-table th {
@@ -142,6 +145,7 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 15px;
 }
 
 .modal-content {
@@ -150,7 +154,7 @@
   padding: 40px;
   border-radius: 12px;
   width: 600px;
-  max-width: 90%;
+  max-width: 100%;
   box-shadow: 0 5px 20px rgba(0,0,0,0.25);
 }
   
@@ -257,11 +261,10 @@
   color: #343a40;
 }
 
-/* --- עיצוב חדש לכפתורים בראש העמוד --- */
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 10px; /* רווח בין הכפתורים */
+    gap: 10px;
 }
 
 .btn-back {
@@ -371,3 +374,63 @@
     color: #dc3545;
     margin-bottom: 15px;
 }
+
+/* --- התאמה למסכים קטנים (Responsive Design) --- */
+@media (max-width: 768px) {
+    .page-container {
+        padding: 15px;
+    }
+
+    .title-and-search {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-container {
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .search-container input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .add-new-btn {
+        margin: 0;
+    }
+
+    .details-container {
+        padding: 20px;
+    }
+    
+    .details-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .details-actions {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+    
+    .reassign-action {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .reassign-action select, .reassign-action button, .btn-close-ticket {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .filter-tabs {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 5px; /* for scrollbar */
+    }
+
+    .filter-tabs button {
+        white-space: nowrap;
