@@ -432,7 +432,7 @@
         padding-bottom: 5px; /* for scrollbar */
     }
 
-        .filter-tabs button {
+    .filter-tabs button {
         white-space: nowrap;
-    } 
-} 
+    }
+  }

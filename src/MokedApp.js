@@ -33,7 +33,7 @@ const LoginScreen = ({ onLogin, users }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם מלא</label>
-                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="לדוגמה: גד כהנא" />
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -170,25 +170,65 @@ const EditTaskModal = ({ task, onClose, onUpdateTask, users }) => {
   );
 };
 
-// --- רכיב פרטי משימה ---
-const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, onEditTask }) => {
-    const availableUsersToReassign = users.filter(user => user.displayName !== task.assignee);
-    const [newAssignee, setNewAssignee] = useState(availableUsersToReassign.length > 0 ? availableUsersToReassign[0].displayName : '');
+// --- רכיב חדש להעברת משימה ---
+const ReassignTaskModal = ({ task, users, onConfirm, onClose, currentUserProfile }) => {
+    const availableUsers = users.filter(u => u.displayName !== task.assignee);
+    const [newAssignee, setNewAssignee] = useState(availableUsers.length > 0 ? availableUsers[0].displayName : '');
+    const [reason, setReason] = useState('');
 
-    const handleReassign = () => {
+    const handleConfirm = () => {
         const currentUserDisplayName = currentUserProfile.displayName;
         const newFollowers = task.followers ? [...task.followers] : [task.requester];
         if (!newFollowers.includes(currentUserDisplayName)) {
             newFollowers.push(currentUserDisplayName);
         }
-        onUpdateTask({ ...task, assignee: newAssignee, status: 'פתוח', followers: newFollowers });
+
+        const commentText = `המשימה הועברה אל ${newAssignee} על ידי ${currentUserDisplayName}.${reason ? `\nפירוט: ${reason}` : ''}`;
+        
+        onConfirm({
+            updatedTask: { ...task, assignee: newAssignee, status: 'פתוח', followers: newFollowers },
+            comment: commentText
+        });
     };
 
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content action-modal">
+                <button className="close-modal-btn" onClick={onClose}>&times;</button>
+                <h2>העברת משימה #{task.taskNumber}</h2>
+                <div className="form-group">
+                    <label>העברה אל</label>
+                    <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
+                        {availableUsers.map(user => (
+                            <option key={user.username} value={user.displayName}>{user.displayName}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>פירוט (אופציונלי)</label>
+                    <textarea 
+                        value={reason} 
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="סיבת ההעברה..."
+                        rows="4"
+                    />
+                </div>
+                <div className="form-actions">
+                    <button onClick={handleConfirm} className="btn-submit">אישור</button>
+                    <button onClick={onClose} className="btn-cancel">ביטול</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- רכיב פרטי משימה ---
+const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, onEditTask, onReassignTask }) => {
     const handleClose = () => {
         onUpdateTask({ ...task, status: 'סגור' });
     };
     
-    // --- שינוי: התנאי המרכזי שקובע אם להציג את כפתורי הפעולה ---
     const isCurrentUserAssignee = currentUserProfile.displayName === task.assignee;
 
     return (
@@ -196,7 +236,6 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
             <div className="details-header">
                 <h2>פרטי משימה #{task.taskNumber}</h2>
                 <div className="header-actions">
-                    {/* --- שינוי: התנאי הזה נשאר זהה --- */}
                     {isCurrentUserAssignee && task.status !== 'סגור' && (
                         <button onClick={() => onEditTask(task)} className="btn-edit">ערוך</button>
                     )}
@@ -215,15 +254,9 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
                     <p>{task.description}</p>
                 </div>
             </div>
-            {/* --- שינוי: הוספת התנאי isCurrentUserAssignee --- */}
             {isCurrentUserAssignee && task.status !== 'סגור' && (
                 <div className="details-actions">
-                    <div className="reassign-action">
-                        <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                            {availableUsersToReassign.map(user => <option key={user.username} value={user.displayName}>{user.displayName}</option>)}
-                        </select>
-                        <button onClick={handleReassign} className="btn-reassign">העבר</button>
-                    </div>
+                    <button onClick={() => onReassignTask(task)} className="btn-reassign">העבר משימה</button>
                     <button onClick={handleClose} className="btn-close-ticket">סגור משימה</button>
                 </div>
             )}
@@ -243,6 +276,7 @@ const MokedApp = () => {
   const [isFormVisible, setFormVisible] = useState(false); 
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  const [reassigningTask, setReassigningTask] = useState(null);
   
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -375,6 +409,24 @@ const MokedApp = () => {
     setSelectedTask(null);
     setEditingTask(null);
   };
+
+  const handleReassignTask = async ({ updatedTask, comment }) => {
+    if (!db) return;
+    
+    const commentsCollectionRef = collection(db, `tasks/${updatedTask.id}/comments`);
+    await addDoc(commentsCollectionRef, {
+        text: comment,
+        author: currentUserProfile.displayName,
+        timestamp: serverTimestamp()
+    });
+
+    const taskDocRef = doc(db, "tasks", updatedTask.id);
+    const { id, ...taskData } = updatedTask;
+    await updateDoc(taskDocRef, taskData);
+    
+    setReassigningTask(null);
+    setSelectedTask(null);
+  };
   
   const filteredTasks = useMemo(() => {
     if (!currentUserProfile) return [];
@@ -404,6 +456,7 @@ const MokedApp = () => {
     <div className="App" dir="rtl">
       {isFormVisible && <NewTaskForm onClose={() => setFormVisible(false)} onAddTask={handleAddTask} users={staffMembers} />}
       {editingTask && <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdateTask={handleUpdateTask} users={staffMembers} />}
+      {reassigningTask && <ReassignTaskModal task={reassigningTask} users={staffMembers} onClose={() => setReassigningTask(null)} onConfirm={handleReassignTask} currentUserProfile={currentUserProfile} />}
       
       <NavBar userProfile={currentUserProfile} onLogout={handleLogout} />
       <div className="page-container">
@@ -416,6 +469,7 @@ const MokedApp = () => {
                 onClose={() => setSelectedTask(null)}
                 currentUserProfile={currentUserProfile}
                 onEditTask={setEditingTask}
+                onReassignTask={setReassigningTask}
             />
         ) : (
             <>
