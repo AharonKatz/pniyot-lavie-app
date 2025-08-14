@@ -400,14 +400,23 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-        setUser(currentUser);
+    // קוד זה משתמש כעת בפונקציות המיובאות
+    const setupAuth = async () => {
+      try {
+        await setPersistence(firebaseAuth, browserSessionPersistence);
+        onAuthStateChanged(firebaseAuth, (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
+        });
+      } catch (error) {
+        console.error("Error setting persistence:", error);
         setLoading(false);
-    });
+      }
+    };
 
-    return () => unsubscribe();
+    setupAuth();
+
   }, []);
-
   useEffect(() => {
     if (!db) return;
     const usersCollectionRef = collection(db, "users");
