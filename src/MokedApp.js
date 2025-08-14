@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import NavBar from "./NavBar";
 import "./MokedApp.css";
 
@@ -6,6 +6,12 @@ import "./MokedApp.css";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs, where, arrayUnion, startAfter } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
+
+// --- ייבוא "עצל" של הרכיבים הכבדים ---
+const NewTaskForm = lazy(() => import('./NewTaskForm'));
+const EditTaskModal = lazy(() => import('./EditTaskModal'));
+const CloseTaskModal = lazy(() => import('./CloseTaskModal'));
+const TransferTaskModal = lazy(() => import('./TransferTaskModal'));
 
 // --- רכיב מסך ההתחברות ---
 const LoginScreen = ({ onLogin, users }) => {
@@ -49,239 +55,8 @@ const LoginScreen = ({ onLogin, users }) => {
     );
 };
 
-// --- רכיב טופס יצירת משימה ---
-const NewTaskForm = ({ onClose, onAddTask, users }) => {
-  const [title, setTitle] = useState('');
-  const [assignee, setAssignee] = useState(''); 
-  const [priority, setPriority] = useState('בינונית');
-  const [description, setDescription] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!title) {
-      alert("יש למלא נושא למשימה.");
-      return;
-    }
-    onAddTask({ title, assignee, priority, description });
-  };
-
-  return (
-    <div className="modal-overlay"> 
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="close-modal-btn" onClick={onClose}>&times;</button>
-        <h2>יצירת משימה חדשה</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>נושא המשימה</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label>מיועד ל- (אופציונלי)</label>
-            <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-              <option value="">-- הקצה לעצמך --</option>
-              {users.map(user => (
-                <option key={user.username} value={user.displayName}>{user.displayName}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>עדיפות</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-              <option value="נמוכה">נמוכה</option>
-              <option value="בינונית">בינונית</option>
-              <option value="גבוהה">גבוהה</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>תיאור</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="4"></textarea>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn-submit">צור משימה</button>
-            <button type="button" className="btn-cancel" onClick={onClose}>ביטול</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- רכיב עריכת משימה ---
-const EditTaskModal = ({ task, onClose, onUpdateTask, users }) => {
-  const [title, setTitle] = useState(task.title);
-  const [assignee, setAssignee] = useState(task.assignee);
-  const [priority, setPriority] = useState(task.priority);
-  const [description, setDescription] = useState(task.description);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!title) {
-      alert("יש למלא נושא למשימה.");
-      return;
-    }
-    onUpdateTask({ 
-      ...task, 
-      title, 
-      assignee, 
-      priority, 
-      description,
-      updatedAt: serverTimestamp()
-    });
-  };
-
-  return (
-    <div className="modal-overlay"> 
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="close-modal-btn" onClick={onClose}>&times;</button>
-        <h2>עריכת משימה #{task.taskNumber}</h2>
-        <form onSubmit={handleSubmit}>
-           <div className="form-group">
-            <label>נושא המשימה</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label>מיועד ל-</label>
-            <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-              {users.map(user => (
-                <option key={user.username} value={user.displayName}>{user.displayName}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>עדיפות</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-              <option value="נמוכה">נמוכה</option>
-              <option value="בינונית">בינונית</option>
-              <option value="גבוהה">גבוהה</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>תיאור</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="4"></textarea>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn-submit">עדכן משימה</button>
-            <button type="button" className="btn-cancel" onClick={onClose}>ביטול</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- רכיב לסגירת משימה עם פירוט ---
-const CloseTaskModal = ({ task, onClose, onCloseTask }) => {
-  const [reason, setReason] = useState('');
-  const [status, setStatus] = useState('הושלם');
-  const [notes, setNotes] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onCloseTask({
-      ...task,
-      status: 'סגור',
-      closeReason: reason,
-      closeStatus: status,
-      closeNotes: notes,
-      closedAt: serverTimestamp()
-    });
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="close-modal-btn" onClick={onClose}>&times;</button>
-        <h2>סגירת משימה #{task.taskNumber}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>סטטוס סגירה</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="הושלם">הושלם</option>
-              <option value="בוטל">בוטל</option>
-              <option value="נדחה">נדחה</option>
-              <option value="כפילות">כפילות</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label>סיבת הסגירה</label>
-            <input 
-              type="text" 
-              value={reason} 
-              onChange={(e) => setReason(e.target.value)} 
-              placeholder="למשל: בוצע בהצלחה, בעיה נפתרה, וכו..."
-              required 
-            />
-          </div>
-          <div className="form-group">
-            <label>הערות נוספות</label>
-            <textarea 
-              value={notes} 
-              onChange={(e) => setNotes(e.target.value)} 
-              rows="3"
-              placeholder="הערות נוספות (אופציונלי)"
-            ></textarea>
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn-submit">סגור משימה</button>
-            <button type="button" className="btn-cancel" onClick={onClose}>ביטול</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- רכיב חדש להעברת משימה ---
-const TransferTaskModal = ({ task, users, onClose, onTransferTask }) => {
-    const [newAssignee, setNewAssignee] = useState('');
-    const [transferNotes, setTransferNotes] = useState('');
-  
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      if (!newAssignee) {
-        alert("יש לבחור משתמש להעברת המשימה.");
-        return;
-      }
-      onTransferTask(task, newAssignee, transferNotes);
-    };
-  
-    const filteredUsers = users.filter(user => user.displayName !== task.assignee);
-  
-    return (
-      <div className="modal-overlay">
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <button className="close-modal-btn" onClick={onClose}>&times;</button>
-          <h2>העברת הטיפול</h2>
-          <form onSubmit={handleSubmit} className="transfer-form">
-            <div className="form-group">
-              <label>העברה אל</label>
-              <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} required>
-                <option value="" disabled>-- בחר משתמש --</option>
-                {filteredUsers.map(user => (
-                  <option key={user.username} value={user.displayName}>{user.displayName}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>טיפול</label>
-              <textarea
-                value={transferNotes}
-                onChange={(e) => setTransferNotes(e.target.value)}
-                rows="4"
-                placeholder="פה פירוט מה תרצה שיתבצע בהמשך"
-              ></textarea>
-            </div>
-            <div className="form-actions">
-              <button type="submit" className="btn-submit">אישור</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-};
-
 // --- רכיב פרטי משימה ---
-const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
+const TaskDetails = ({ task, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
     const isCurrentUserAssignee = currentUserProfile?.displayName === task.assignee;
 
     return (
@@ -352,12 +127,8 @@ const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onC
 
 const formatDate = (dateString) => {
   if (!dateString) return '';
-  if (dateString.toDate) {
-    return dateString.toDate().toLocaleString('he-IL');
-  }
-  if (dateString.seconds) {
-    return new Date(dateString.seconds * 1000).toLocaleString('he-IL');
-  }
+  if (dateString.toDate) return dateString.toDate().toLocaleString('he-IL');
+  if (dateString.seconds) return new Date(dateString.seconds * 1000).toLocaleString('he-IL');
   return new Date(dateString).toLocaleString('he-IL');
 };
 
@@ -419,7 +190,7 @@ const MokedApp = () => {
     const usersCollectionRef = collection(db, "users");
     const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
         setStaffMembers(snapshot.docs.map(doc => doc.data()));
-    });
+    }, (error) => console.error("Error fetching users:", error));
     return () => unsubscribeUsers();
   }, [db]);
 
@@ -439,6 +210,7 @@ const MokedApp = () => {
 
     setLoading(true);
     setLastVisible(null); 
+
     let baseQuery;
     const currentUserDisplayName = currentUserProfile.displayName;
 
@@ -585,15 +357,17 @@ const MokedApp = () => {
 
   return (
     <div className="App" dir="rtl">
-      {isFormVisible && <NewTaskForm onClose={() => setFormVisible(false)} onAddTask={handleAddTask} users={staffMembers} />}
-      {editingTask && <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdateTask={handleUpdateTask} users={staffMembers} />}
-      {closingTask && <CloseTaskModal task={closingTask} onClose={() => setClosingTask(null)} onCloseTask={handleCloseTask} />}
-      {transferringTask && <TransferTaskModal 
-          task={transferringTask} 
-          onClose={() => setTransferringTask(null)}
-          onTransferTask={handleTransferTask}
-          users={staffMembers}
-      />}
+      <Suspense fallback={<div className="loading-indicator">טוען...</div>}>
+        {isFormVisible && <NewTaskForm onClose={() => setFormVisible(false)} onAddTask={handleAddTask} users={staffMembers} />}
+        {editingTask && <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onUpdateTask={handleUpdateTask} users={staffMembers} />}
+        {closingTask && <CloseTaskModal task={closingTask} onClose={() => setClosingTask(null)} onCloseTask={handleCloseTask} />}
+        {transferringTask && <TransferTaskModal 
+            task={transferringTask} 
+            onClose={() => setTransferringTask(null)}
+            onTransferTask={handleTransferTask}
+            users={staffMembers}
+        />}
+      </Suspense>
       
       <NavBar userProfile={currentUserProfile} onLogout={handleLogout} />
       <div className="page-container">
@@ -601,7 +375,6 @@ const MokedApp = () => {
         {selectedTask ? (
             <TaskDetails 
                 task={selectedTask} 
-                users={staffMembers}
                 onClose={() => setSelectedTask(null)}
                 currentUserProfile={currentUserProfile}
                 onEditTask={setEditingTask}
@@ -628,31 +401,34 @@ const MokedApp = () => {
                 </div>
 
                 <div className="data-table-container">
-                    <table className="data-table">
-                        <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>נושא המשימה</th>
-                            <th>מיועד ל-</th>
-                            <th>עדיפות</th>
-                            <th>סטטוס</th>
-                            <th>תאריך יצירה</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {tasks.map((task) => (
-                            <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
-                                <td>{task.taskNumber}</td>
-                                <td>{task.title}</td>
-                                <td>{task.assignee}</td>
-                                <td className={`priority-${task.priority}`}>{task.priority}</td>
-                                <td>{task.status}</td>
-                                <td>{formatDate(task.createdAt)}</td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                    {loading && tasks.length > 0 && <div className="loading-indicator">טוען...</div>}
+                  {loading && tasks.length === 0 ? (
+                      <div className="loading-indicator" style={{marginTop: '20px'}}>טוען משימות...</div>
+                  ) : (
+                      <table className="data-table">
+                          <thead>
+                          <tr>
+                              <th>#</th>
+                              <th>נושא המשימה</th>
+                              <th>מיועד ל-</th>
+                              <th>עדיפות</th>
+                              <th>סטטוס</th>
+                              <th>תאריך יצירה</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          {tasks.map((task) => (
+                              <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
+                                  <td>{task.taskNumber}</td>
+                                  <td>{task.title}</td>
+                                  <td>{task.assignee}</td>
+                                  <td className={`priority-${task.priority}`}>{task.priority}</td>
+                                  <td>{task.status}</td>
+                                  <td>{formatDate(task.createdAt)}</td>
+                              </tr>
+                          ))}
+                          </tbody>
+                      </table>
+                  )}
                 </div>
                 {lastVisible && !loadingMore && (
                     <div className="load-more-container">
