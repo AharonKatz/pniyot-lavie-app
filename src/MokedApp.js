@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import NavBar from "./NavBar";
 import "./MokedApp.css"; 
 
 // --- ייבוא כל מה שצריך מ-Firebase ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs, arrayUnion } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs, where, arrayUnion } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
 
 // --- רכיב מסך ההתחברות ---
@@ -233,7 +233,7 @@ const CloseTaskModal = ({ task, onClose, onCloseTask }) => {
 };
 
 // --- רכיב חדש להעברת משימה ---
-const TransferTaskModal = ({ task, users, onClose, onTransferTask, currentUserProfile }) => {
+const TransferTaskModal = ({ task, users, onClose, onTransferTask }) => {
     const [newAssignee, setNewAssignee] = useState('');
     const [transferNotes, setTransferNotes] = useState('');
   
@@ -246,7 +246,6 @@ const TransferTaskModal = ({ task, users, onClose, onTransferTask, currentUserPr
       onTransferTask(task, newAssignee, transferNotes);
     };
   
-    // מסננים את המשתמש הנוכחי מרשימת ההעברה
     const filteredUsers = users.filter(user => user.displayName !== task.assignee);
   
     return (
@@ -283,7 +282,7 @@ const TransferTaskModal = ({ task, users, onClose, onTransferTask, currentUserPr
   };
 
 // --- רכיב פרטי משימה ---
-const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
+const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
     const isCurrentUserAssignee = currentUserProfile?.displayName === task.assignee;
 
     return (
@@ -320,7 +319,6 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
                     <p>{task.description}</p>
                 </div>
 
-                {/* === הבלוק החדש שהוספנו === */}
                 {task.transferHistory && task.transferHistory.length > 0 && (
                   <div className="transfer-history">
                     <h4>היסטוריית העברות</h4>
@@ -342,7 +340,6 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
                     ))}
                   </div>
                 )}
-                {/* === סוף הבלוק החדש === */}
 
             </div>
             {isCurrentUserAssignee && task.status !== 'סגור' && (
@@ -357,9 +354,16 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
 
 
 const formatDate = (dateString) => {
-  if (!dateString || !dateString.seconds) return '';
-  const date = new Date(dateString.seconds * 1000);
-  return date.toLocaleString('he-IL');
+  if (!dateString) return '';
+  // Firestore Timestamps have .toDate() method, standard JS Dates don't
+  if (dateString.toDate) {
+    return dateString.toDate().toLocaleString('he-IL');
+  }
+  // Fallback for JS dates created on the client (like in transferHistory)
+  if (dateString.seconds) {
+    return new Date(dateString.seconds * 1000).toLocaleString('he-IL');
+  }
+  return new Date(dateString).toLocaleString('he-IL');
 };
 
 const MokedApp = () => {
@@ -396,52 +400,24 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    let unsubscribe = () => {};
-    const setupAuth = async () => {
-        try {
-            await setPersistence(firebaseAuth, browserSessionPersistence);
-            unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-                setUser(currentUser);
-                setLoading(false);
-            });
-        } catch (error) {
-            console.error("Error setting persistence:", error);
-            setLoading(false);
-        }
-    };
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+    });
 
-    setupAuth();
-
-    return () => {
-        unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!db) return;
-
     const usersCollectionRef = collection(db, "users");
     const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
         const usersData = snapshot.docs.map(doc => doc.data());
         setStaffMembers(usersData);
     }, (error) => console.error("Error fetching users:", error));
 
-    if (!user) {
-        setTasks([]);
-        return () => unsubscribeUsers();
-    };
-    
-    const tasksQuery = query(collection(db, "tasks"), orderBy("taskNumber", "desc"));
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      setTasks(tasksData);
-    }, (error) => console.error("Error fetching tasks:", error));
-
-    return () => {
-        unsubscribeUsers();
-        unsubscribeTasks();
-    };
-  }, [db, user]);
+    return () => unsubscribeUsers();
+  }, [db]);
 
   useEffect(() => {
     if (user && staffMembers.length > 0) {
@@ -452,6 +428,58 @@ const MokedApp = () => {
         setCurrentUserProfile(null);
     }
   }, [user, staffMembers]);
+
+  // useEffect חדש ומותאם לטעינה דינמית
+  useEffect(() => {
+    if (!db || !user || !currentUserProfile) {
+      setTasks([]);
+      return;
+    }
+
+    const currentUserDisplayName = currentUserProfile.displayName;
+    let unsubscribe = () => {};
+
+    if (statusFilter === 'פתוח') {
+      const q = query(collection(db, "tasks"), 
+        where("status", "==", "פתוח"),
+        where("assignee", "==", currentUserDisplayName),
+        orderBy("taskNumber", "desc")
+      );
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        setTasks(tasksData);
+      }, (error) => console.error(`Error fetching 'פתוח':`, error));
+    }
+    
+    else if (statusFilter === 'במעקב') {
+      const q = query(collection(db, "tasks"),
+        where("status", "!=", "סגור"),
+        where("followers", "array-contains", currentUserDisplayName),
+        orderBy("status"),
+        orderBy("taskNumber", "desc")
+      );
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        const filtered = tasksData.filter(t => t.assignee !== currentUserDisplayName);
+        setTasks(filtered);
+      }, (error) => console.error(`Error fetching 'במעקב':`, error));
+    }
+
+    else if (statusFilter === 'סגור') {
+      const q = query(collection(db, "tasks"),
+        where("status", "==", "סגור"),
+        where("followers", "array-contains", currentUserDisplayName),
+        orderBy("taskNumber", "desc")
+      );
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        setTasks(tasksData);
+      }, (error) => console.error(`Error fetching 'סגור':`, error));
+    }
+
+    return () => unsubscribe();
+
+  }, [db, user, statusFilter, currentUserProfile]);
 
   const handleLogin = async (fullName, password) => {
     if (!auth || staffMembers.length === 0) throw new Error("Auth service or staff list not ready");
@@ -488,7 +516,8 @@ const MokedApp = () => {
         status: "פתוח",
         createdAt: serverTimestamp(),
         taskNumber: lastTaskNumber + 1,
-        followers: [requesterName]
+        followers: [requesterName],
+        transferHistory: []
     });
     setFormVisible(false);
   };
@@ -511,7 +540,7 @@ const MokedApp = () => {
       setSelectedTask(null);
   };
 
- const handleTransferTask = async (task, newAssignee, transferNotes) => {
+  const handleTransferTask = async (task, newAssignee, transferNotes) => {
     if (!db || !currentUserProfile) return;
 
     const currentUserDisplayName = currentUserProfile.displayName;
@@ -521,45 +550,26 @@ const MokedApp = () => {
         newFollowers.push(currentUserDisplayName);
     }
 
-    // ----  השינוי המרכזי כאן ----
     const newHistoryEntry = {
         from: currentUserDisplayName,
         to: newAssignee,
         notes: transferNotes,
-        date: new Date() // שימוש בזמן מקומי מהדפדפן במקום serverTimestamp()
+        date: new Date()
     };
 
     const taskDocRef = doc(db, "tasks", task.id);
-    
     await updateDoc(taskDocRef, {
         assignee: newAssignee,
         status: 'פתוח',
         followers: newFollowers,
         transferHistory: arrayUnion(newHistoryEntry),
-        updatedAt: serverTimestamp() // זה נשאר כמו שהוא - תקין לחלוטין
+        updatedAt: serverTimestamp()
     });
 
     setTransferringTask(null);
     setSelectedTask(null);
   };
   
-  const filteredTasks = useMemo(() => {
-    if (!currentUserProfile) return [];
-    const currentUserDisplayName = currentUserProfile.displayName;
-    
-    if (statusFilter === 'פתוח') {
-        return tasks.filter(t => t.assignee === currentUserDisplayName && t.status === 'פתוח');
-    }
-    if (statusFilter === 'במעקב') {
-        return tasks.filter(t => t.assignee !== currentUserDisplayName && t.status !== 'סגור' && t.followers && t.followers.includes(currentUserDisplayName));
-    }
-    if (statusFilter === 'סגור') {
-        return tasks.filter(t => t.status === 'סגור' && (t.assignee === currentUserDisplayName || (t.followers && t.followers.includes(currentUserDisplayName))));
-    }
-    return [];
-  }, [tasks, statusFilter, currentUserProfile]);
-
- 
   if (loading || !db) {
     return <div className="loading-indicator">טוען...</div>;
   }
@@ -578,7 +588,6 @@ const MokedApp = () => {
           onClose={() => setTransferringTask(null)}
           onTransferTask={handleTransferTask}
           users={staffMembers}
-          currentUserProfile={currentUserProfile}
       />}
       
       <NavBar userProfile={currentUserProfile} onLogout={handleLogout} />
@@ -588,7 +597,6 @@ const MokedApp = () => {
             <TaskDetails 
                 task={selectedTask} 
                 users={staffMembers}
-                onUpdateTask={handleUpdateTask}
                 onClose={() => setSelectedTask(null)}
                 currentUserProfile={currentUserProfile}
                 onEditTask={setEditingTask}
@@ -627,7 +635,7 @@ const MokedApp = () => {
                     </tr>
                     </thead>
                     <tbody>
-                    {filteredTasks.map((task) => (
+                    {tasks.map((task) => (
                         <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
                         <td>{task.taskNumber}</td>
                         <td>{task.title}</td>
