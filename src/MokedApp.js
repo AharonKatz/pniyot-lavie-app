@@ -284,7 +284,6 @@ const TransferTaskModal = ({ task, users, onClose, onTransferTask, currentUserPr
 
 // --- רכיב פרטי משימה ---
 const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
-
     const isCurrentUserAssignee = currentUserProfile?.displayName === task.assignee;
 
     return (
@@ -320,6 +319,31 @@ const TaskDetails = ({ task, users, onUpdateTask, onClose, currentUserProfile, o
                     <strong>תיאור:</strong>
                     <p>{task.description}</p>
                 </div>
+
+                {/* === הבלוק החדש שהוספנו === */}
+                {task.transferHistory && task.transferHistory.length > 0 && (
+                  <div className="transfer-history">
+                    <h4>היסטוריית העברות</h4>
+                    {[...task.transferHistory].reverse().map((entry, index) => (
+                      <div key={index} className="history-entry">
+                        <p>
+                          <small>
+                            <strong>הועבר מאת:</strong> {entry.from}
+                            <strong> אל:</strong> {entry.to}
+                            <strong> בתאריך:</strong> {formatDate(entry.date)}
+                          </small>
+                        </p>
+                        {entry.notes && (
+                          <p className="history-notes">
+                            <strong>הערות ההעברה:</strong> {entry.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* === סוף הבלוק החדש === */}
+
             </div>
             {isCurrentUserAssignee && task.status !== 'סגור' && (
                 <div className="details-actions">
