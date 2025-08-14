@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import NavBar from "./NavBar";
-import "./MokedApp.css"; 
+import "./MokedApp.css";
 
-// --- ייבוא כל מה שצריך מ-Firebase ---
+// --- ייבוא כל מה שצריך מ-Firebase (כולל כלים לדפדוף) ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs, where, arrayUnion } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, limit, getDocs, where, arrayUnion, startAfter } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "firebase/auth";
 
 // --- רכיב מסך ההתחברות ---
@@ -33,7 +33,7 @@ const LoginScreen = ({ onLogin, users }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>שם מלא</label>
-                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}/>
+                        <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required/>
                     </div>
                     <div className="form-group">
                         <label>סיסמה</label>
@@ -48,7 +48,6 @@ const LoginScreen = ({ onLogin, users }) => {
         </div>
     );
 };
-
 
 // --- רכיב טופס יצירת משימה ---
 const NewTaskForm = ({ onClose, onAddTask, users }) => {
@@ -136,7 +135,7 @@ const EditTaskModal = ({ task, onClose, onUpdateTask, users }) => {
         <button className="close-modal-btn" onClick={onClose}>&times;</button>
         <h2>עריכת משימה #{task.taskNumber}</h2>
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
+           <div className="form-group">
             <label>נושא המשימה</label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
@@ -279,7 +278,7 @@ const TransferTaskModal = ({ task, users, onClose, onTransferTask }) => {
         </div>
       </div>
     );
-  };
+};
 
 // --- רכיב פרטי משימה ---
 const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onCloseTask, onInitiateTransfer }) => {
@@ -340,7 +339,6 @@ const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onC
                     ))}
                   </div>
                 )}
-
             </div>
             {isCurrentUserAssignee && task.status !== 'סגור' && (
                 <div className="details-actions">
@@ -352,14 +350,11 @@ const TaskDetails = ({ task, users, onClose, currentUserProfile, onEditTask, onC
     );
 };
 
-
 const formatDate = (dateString) => {
   if (!dateString) return '';
-  // Firestore Timestamps have .toDate() method, standard JS Dates don't
   if (dateString.toDate) {
     return dateString.toDate().toLocaleString('he-IL');
   }
-  // Fallback for JS dates created on the client (like in transferHistory)
   if (dateString.seconds) {
     return new Date(dateString.seconds * 1000).toLocaleString('he-IL');
   }
@@ -381,7 +376,11 @@ const MokedApp = () => {
   const [user, setUser] = useState(null);
   const [staffMembers, setStaffMembers] = useState([]);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
-  
+
+  const [lastVisible, setLastVisible] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const TASKS_PER_PAGE = 20;
+
   useEffect(() => {
     const firebaseConfig = {
       apiKey: "AIzaSyCYGDwSDB2zbyJVRgp7I-VPOvv9ujWGvxA",
@@ -400,7 +399,6 @@ const MokedApp = () => {
     setDb(firestoreDb);
     setAuth(firebaseAuth);
 
-    // קוד זה משתמש כעת בפונקציות המיובאות
     const setupAuth = async () => {
       try {
         await setPersistence(firebaseAuth, browserSessionPersistence);
@@ -413,91 +411,104 @@ const MokedApp = () => {
         setLoading(false);
       }
     };
-
     setupAuth();
-
   }, []);
+
   useEffect(() => {
     if (!db) return;
     const usersCollectionRef = collection(db, "users");
     const unsubscribeUsers = onSnapshot(usersCollectionRef, (snapshot) => {
-        const usersData = snapshot.docs.map(doc => doc.data());
-        setStaffMembers(usersData);
-    }, (error) => console.error("Error fetching users:", error));
-
+        setStaffMembers(snapshot.docs.map(doc => doc.data()));
+    });
     return () => unsubscribeUsers();
   }, [db]);
 
   useEffect(() => {
     if (user && staffMembers.length > 0) {
-        const username = user.email.split('@')[0];
-        const profile = staffMembers.find(member => member.username === username);
-        setCurrentUserProfile(profile);
+        setCurrentUserProfile(staffMembers.find(member => member.username === user.email.split('@')[0]));
     } else {
         setCurrentUserProfile(null);
     }
   }, [user, staffMembers]);
 
-  // useEffect חדש ומותאם לטעינה דינמית
   useEffect(() => {
     if (!db || !user || !currentUserProfile) {
-      setTasks([]);
-      return;
+        setTasks([]);
+        return;
     }
 
+    setLoading(true);
+    setLastVisible(null); 
+    let baseQuery;
     const currentUserDisplayName = currentUserProfile.displayName;
-    let unsubscribe = () => {};
 
     if (statusFilter === 'פתוח') {
-      const q = query(collection(db, "tasks"), 
-        where("status", "==", "פתוח"),
-        where("assignee", "==", currentUserDisplayName),
-        orderBy("taskNumber", "desc")
-      );
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        setTasks(tasksData);
-      }, (error) => console.error(`Error fetching 'פתוח':`, error));
-    }
-    
-    else if (statusFilter === 'במעקב') {
-      const q = query(collection(db, "tasks"),
-        where("status", "!=", "סגור"),
-        where("followers", "array-contains", currentUserDisplayName),
-        orderBy("status"),
-        orderBy("taskNumber", "desc")
-      );
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        const filtered = tasksData.filter(t => t.assignee !== currentUserDisplayName);
-        setTasks(filtered);
-      }, (error) => console.error(`Error fetching 'במעקב':`, error));
+        baseQuery = query(collection(db, "tasks"), where("status", "==", "פתוח"), where("assignee", "==", currentUserDisplayName), orderBy("taskNumber", "desc"));
+    } else if (statusFilter === 'במעקב') {
+        baseQuery = query(collection(db, "tasks"), where("status", "!=", "סגור"), where("followers", "array-contains", currentUserDisplayName), orderBy("status"), orderBy("taskNumber", "desc"));
+    } else if (statusFilter === 'סגור') {
+        baseQuery = query(collection(db, "tasks"), where("status", "==", "סגור"), where("followers", "array-contains", currentUserDisplayName), orderBy("taskNumber", "desc"));
+    } else {
+        setLoading(false);
+        return;
     }
 
-    else if (statusFilter === 'סגור') {
-      const q = query(collection(db, "tasks"),
-        where("status", "==", "סגור"),
-        where("followers", "array-contains", currentUserDisplayName),
-        orderBy("taskNumber", "desc")
-      );
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const q = query(baseQuery, limit(TASKS_PER_PAGE));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        let tasksData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        if (statusFilter === 'במעקב') {
+            tasksData = tasksData.filter(t => t.assignee !== currentUserDisplayName);
+        }
+        
         setTasks(tasksData);
-      }, (error) => console.error(`Error fetching 'סגור':`, error));
-    }
-
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+        setLoading(false);
+    }, (error) => {
+        console.error(`Error fetching tasks for filter '${statusFilter}':`, error);
+        setLoading(false);
+    });
     return () => unsubscribe();
+  }, [db, user, currentUserProfile, statusFilter]);
+  
+  const fetchMoreTasks = async () => {
+    if (!lastVisible || !currentUserProfile) return;
 
-  }, [db, user, statusFilter, currentUserProfile]);
+    setLoadingMore(true);
+    const currentUserDisplayName = currentUserProfile.displayName;
+    
+    let baseQuery;
+    if (statusFilter === 'פתוח') {
+        baseQuery = query(collection(db, "tasks"), where("status", "==", "פתוח"), where("assignee", "==", currentUserDisplayName), orderBy("taskNumber", "desc"));
+    } else if (statusFilter === 'במעקב') {
+        baseQuery = query(collection(db, "tasks"), where("status", "!=", "סגור"), where("followers", "array-contains", currentUserDisplayName), orderBy("status"), orderBy("taskNumber", "desc"));
+    } else if (statusFilter === 'סגור') {
+        baseQuery = query(collection(db, "tasks"), where("status", "==", "סגור"), where("followers", "array-contains", currentUserDisplayName), orderBy("taskNumber", "desc"));
+    } else {
+        setLoadingMore(false);
+        return;
+    }
 
+    const nextQuery = query(baseQuery, startAfter(lastVisible), limit(TASKS_PER_PAGE));
+    
+    try {
+        const documentSnapshots = await getDocs(nextQuery);
+        let newTasks = documentSnapshots.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        if (statusFilter === 'במעקב') {
+            newTasks = newTasks.filter(t => t.assignee !== currentUserDisplayName);
+        }
+
+        setTasks(prevTasks => [...prevTasks, ...newTasks]);
+        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+    } catch (error) {
+        console.error("Error fetching more tasks:", error);
+    }
+    setLoadingMore(false);
+  };
+  
   const handleLogin = async (fullName, password) => {
     if (!auth || staffMembers.length === 0) throw new Error("Auth service or staff list not ready");
-    
     const userToLogin = staffMembers.find(member => member.displayName === fullName);
-    if (!userToLogin) {
-        throw new Error("User not found");
-    }
-
+    if (!userToLogin) throw new Error("User not found");
     const email = `${userToLogin.username.toLowerCase()}@lavie.system`;
     await signInWithEmailAndPassword(auth, email, password);
   };
@@ -510,14 +521,11 @@ const MokedApp = () => {
   const handleAddTask = async (newTaskData) => {
     if (!db || !currentUserProfile) return;
     const tasksCollectionRef = collection(db, "tasks");
-
     const counterQuery = query(tasksCollectionRef, orderBy("taskNumber", "desc"), limit(1));
     const lastTaskSnapshot = await getDocs(counterQuery);
     const lastTaskNumber = lastTaskSnapshot.empty ? 0 : lastTaskSnapshot.docs[0].data().taskNumber;
-    
     const requesterName = currentUserProfile.displayName;
     const finalAssignee = newTaskData.assignee || requesterName;
-
     await addDoc(tasksCollectionRef, {
         ...newTaskData,
         assignee: finalAssignee,
@@ -548,24 +556,13 @@ const MokedApp = () => {
       setClosingTask(null);
       setSelectedTask(null);
   };
-
+  
   const handleTransferTask = async (task, newAssignee, transferNotes) => {
     if (!db || !currentUserProfile) return;
-
     const currentUserDisplayName = currentUserProfile.displayName;
-
     const newFollowers = task.followers ? [...task.followers] : [task.requester];
-    if (!newFollowers.includes(currentUserDisplayName)) {
-        newFollowers.push(currentUserDisplayName);
-    }
-
-    const newHistoryEntry = {
-        from: currentUserDisplayName,
-        to: newAssignee,
-        notes: transferNotes,
-        date: new Date()
-    };
-
+    if (!newFollowers.includes(currentUserDisplayName)) newFollowers.push(currentUserDisplayName);
+    const newHistoryEntry = { from: currentUserDisplayName, to: newAssignee, notes: transferNotes, date: new Date() };
     const taskDocRef = doc(db, "tasks", task.id);
     await updateDoc(taskDocRef, {
         assignee: newAssignee,
@@ -574,12 +571,11 @@ const MokedApp = () => {
         transferHistory: arrayUnion(newHistoryEntry),
         updatedAt: serverTimestamp()
     });
-
     setTransferringTask(null);
     setSelectedTask(null);
   };
   
-  if (loading || !db) {
+  if (loading && tasks.length === 0) {
     return <div className="loading-indicator">טוען...</div>;
   }
 
@@ -615,51 +611,57 @@ const MokedApp = () => {
         ) : (
             <>
                 <div className="controls-bar">
-                <div className="title-and-search">
-                    <h1>ניהול משימות</h1>
-                    <button className="add-new-btn" onClick={() => setFormVisible(true)}>+</button>
-                    <div className="search-container">
-                    <input type="text" placeholder="חפש..." />
+                    <div className="title-and-search">
+                        <h1>ניהול משימות</h1>
+                        <button className="add-new-btn" onClick={() => setFormVisible(true)}>+</button>
+                        <div className="search-container">
+                            <input type="text" placeholder="חפש..." />
+                        </div>
                     </div>
-                </div>
-                <div className="filter-tabs">
-                    {["פתוח", "במעקב", "סגור"].map((status) => (
-                    <button key={status} className={statusFilter === status ? "active" : ""} onClick={() => setStatusFilter(status)}>
-                        {status}
-                    </button>
-                    ))}
-                </div>
+                    <div className="filter-tabs">
+                        {["פתוח", "במעקב", "סגור"].map((status) => (
+                        <button key={status} className={statusFilter === status ? "active" : ""} onClick={() => setStatusFilter(status)}>
+                            {status}
+                        </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="data-table-container">
-                <table className="data-table">
-                    <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>נושא המשימה</th>
-                        <th>מיועד ל-</th>
-                        <th>עדיפות</th>
-                        <th>סטטוס</th>
-                        <th>תאריך יצירה</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {tasks.map((task) => (
-                        <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
-                        <td>{task.taskNumber}</td>
-                        <td>{task.title}</td>
-                        <td>{task.assignee}</td>
-                        <td className={`priority-${task.priority}`}>{task.priority}</td>
-                        <td>{task.status}</td>
-                        <td>{formatDate(task.createdAt)}</td>
+                    <table className="data-table">
+                        <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>נושא המשימה</th>
+                            <th>מיועד ל-</th>
+                            <th>עדיפות</th>
+                            <th>סטטוס</th>
+                            <th>תאריך יצירה</th>
                         </tr>
-                    ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        {tasks.map((task) => (
+                            <tr key={task.id} onClick={() => setSelectedTask(task)} className="clickable-row">
+                                <td>{task.taskNumber}</td>
+                                <td>{task.title}</td>
+                                <td>{task.assignee}</td>
+                                <td className={`priority-${task.priority}`}>{task.priority}</td>
+                                <td>{task.status}</td>
+                                <td>{formatDate(task.createdAt)}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                    {loading && tasks.length > 0 && <div className="loading-indicator">טוען...</div>}
                 </div>
+                {lastVisible && !loadingMore && (
+                    <div className="load-more-container">
+                        <button onClick={fetchMoreTasks} className="load-more-btn">טען עוד</button>
+                    </div>
+                )}
+                {loadingMore && <div className="loading-indicator">טוען נתונים נוספים...</div>}
             </>
         )}
-
       </div>
     </div>
   );
