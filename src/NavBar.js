@@ -15,10 +15,7 @@ const NavBar = ({ userProfile, onLogout }) => {
         <img src={logo} alt="לוגו עמותת לביא" />
       </div>
       
-      <nav className="main-nav">
-        {/* תיקון: שינוי הקישור כך שיוביל לדף הבית */}
-        <a href="/">משימות</a>
-      </nav>
+      
       
       <div className="user-menu">
         <span className="user-email">{getUsername()}</span>
